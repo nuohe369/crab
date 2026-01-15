@@ -1,0 +1,87 @@
+# Crab Framework Configuration File
+
+[app]
+name = "server"
+version = "0.1.0"
+env = "dev"  # dev: development, prod: production
+
+[server]
+addr = ":3000"
+
+# ==================== Database Configuration ====================
+[database]
+host = "localhost"
+port = 5432
+user = "server"
+password = "server"
+db_name = "server"
+
+# ==================== Redis Configuration ====================
+[redis]
+# Standalone mode
+addr = "localhost:6379"
+password = ""
+db = 0
+# Cluster mode (automatically switches when configured, addr and db will be ignored)
+# cluster = "host1:6379,host2:6379,host3:6379"
+
+# ==================== Message Queue Configuration ====================
+[mq]
+driver = ""  # redis or rabbitmq, leave empty to disable
+
+[mq.redis]
+addr = "localhost:6379"
+password = ""
+db = 0
+max_len = 10000  # Stream max length, 0 means unlimited
+# cluster = "host1:6379,host2:6379,host3:6379"
+
+[mq.rabbitmq]
+url = "amqp://guest:guest@localhost:5672/"
+
+# ==================== JWT Configuration ====================
+[jwt]
+secret = "your-jwt-secret-change-me"
+expire = "24h"
+
+# ==================== Tracing Configuration ====================
+[trace]
+service_name = "server"
+endpoint = ""  # Leave empty to disable, e.g.: localhost:4318
+insecure = true
+
+# ==================== Metrics Configuration ====================
+[metrics]
+enabled = false
+path = "/metrics"
+
+# ==================== Storage Configuration ====================
+[storage]
+driver = ""  # local, oss, s3, leave empty to disable
+
+[storage.local]
+root = "./uploads"
+base_url = "/uploads"  # For frontend-backend separation, configure full URL, e.g.: https://api.example.com/uploads
+
+[storage.oss]
+endpoint = ""
+access_key_id = ""
+access_key_secret = ""
+bucket = ""
+base_url = ""  # CDN domain
+
+[storage.s3]
+region = "us-east-1"
+access_key_id = ""
+secret_access_key = ""
+bucket = ""
+endpoint = ""  # Custom endpoint for MinIO, etc.
+base_url = ""
+
+# ==================== Service Configuration ====================
+# Define different service combinations, start with serve -s <name>
+
+[[services]]
+name = "test"
+addr = ":3001"
+modules = ["testapi", "ws"]
