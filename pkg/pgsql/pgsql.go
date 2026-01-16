@@ -3,6 +3,7 @@ package pgsql
 import (
 	"fmt"
 	"log"
+	"sync"
 
 	_ "github.com/lib/pq"
 	"xorm.io/xorm"
@@ -30,7 +31,11 @@ type Client struct {
 	xormLogger *XormLogger
 }
 
-var defaultClient *Client
+var (
+	clients       = make(map[string]*Client)
+	defaultClient *Client
+	mu            sync.RWMutex
+)
 
 // Init initializes default client
 func Init(cfg Config) error {
@@ -38,20 +43,68 @@ func Init(cfg Config) error {
 	if err != nil {
 		return err
 	}
+	mu.Lock()
 	defaultClient = client
+	mu.Unlock()
 	return nil
 }
 
-// Get returns default client
-func Get() *Client {
-	return defaultClient
+// InitNamed initializes a named database client
+func InitNamed(name string, cfg Config) error {
+	client, err := New(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to init named client %s: %w", name, err)
+	}
+	mu.Lock()
+	clients[name] = client
+	mu.Unlock()
+	return nil
 }
 
-// Close closes default client
+// InitMultiple initializes multiple database clients
+// Usage:
+//
+//	configs := map[string]Config{
+//	    "usercenter": {...},
+//	    "organization": {...},
+//	}
+//	err := pgsql.InitMultiple(configs)
+func InitMultiple(configs map[string]Config) error {
+	for name, cfg := range configs {
+		if err := InitNamed(name, cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Get returns database client
+// Usage:
+//
+//	pgsql.Get()              // returns default database
+//	pgsql.Get("usercenter")  // returns usercenter database
+func Get(name ...string) *Client {
+	if len(name) == 0 {
+		return defaultClient
+	}
+	mu.RLock()
+	defer mu.RUnlock()
+	return clients[name[0]]
+}
+
+// Close closes default client and all named clients
 func Close() {
 	if defaultClient != nil {
 		defaultClient.Close()
 	}
+	mu.Lock()
+	for _, client := range clients {
+		if client != nil {
+			client.Close()
+		}
+	}
+	clients = make(map[string]*Client)
+	mu.Unlock()
 }
 
 // SetLogger sets the logger for pgsql.

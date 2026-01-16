@@ -1,5 +1,5 @@
 # Binaries
-server
+
 *.exe
 *.exe~
 *.dll
@@ -27,6 +27,7 @@ uploads/
 *.swp
 *.swo
 *~
+.claude
 
 # OS
 .DS_Store
@@ -34,3 +35,5 @@ Thumbs.db
 
 # Vendor
 vendor/
+ai-docs/
+.claude/
