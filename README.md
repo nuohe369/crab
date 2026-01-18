@@ -305,7 +305,7 @@ ids := strconv.Int64ToStringBatch([]int64{1, 2, 3})
 
 ## License
 
-MIT
+Apache License 2.0
 
 ## Acknowledgments
 
