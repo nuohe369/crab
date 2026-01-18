@@ -8,6 +8,19 @@ English | [简体中文](README_CN.md)
 
 ![Architecture](docs/architecture.jpg)
 
+## Features
+
+- ✅ **Modular Architecture** - Clean layered design with dependency inversion
+- ✅ **Multi-Database Support** - Multiple PostgreSQL and Redis instances
+- ✅ **Module Dependency Management** - Automatic validation with strict/lenient modes
+- ✅ **Unified Logging System** - Colored console output + module-specific log files
+- ✅ **Error Management** - Comprehensive error code system
+- ✅ **Performance Optimized** - String conversion cache, connection pooling
+- ✅ **Bilingual Comments** - English + Chinese code documentation
+- ✅ **Flexible Deployment** - Monolith or microservices from same codebase
+- ✅ **Hot Reload** - Config hot-reload with encryption support
+- ✅ **Comprehensive Testing** - 40+ unit tests with good coverage
+
 ## Quick Start
 
 ```bash
@@ -16,6 +29,7 @@ go run . serve             # Start all modules
 go run . serve -s api      # Start by service name
 go run . serve -m testapi  # Start by module name
 go run . list              # List modules and services
+go run . deps              # Show module dependencies
 ```
 
 ## Project Structure
@@ -82,24 +96,56 @@ Demonstrates various usages of `pkg/ws`, provided as reference examples only. Se
 
 ## Configuration
 
+### Multi-Database Support
+
 ```toml
 # config.toml
-[database]
+[app]
+name = "crab"
+env = "dev"
+strict_dependency_check = true  # Validate module dependencies
+
+# Multiple PostgreSQL databases
+[database.default]
 host = "localhost"
 port = 5432
 user = "postgres"
 password = "ENC(xxxxx...)"  # Encrypted value
-dbname = "crab"
+db_name = "crab"
+auto_migrate = true
+show_sql = false
 
-[redis]
+[database.usercenter]
+host = "localhost"
+db_name = "crab_usercenter"
+auto_migrate = true
+
+# Multiple Redis instances
+[redis.default]
 addr = "localhost:6379"
 password = ""
 db = 0
+
+[redis.cache]
+addr = "localhost:6380"
+db = 1
 
 [[services]]
 name = "api"
 addr = ":3000"
 modules = ["testapi", "ws"]
+```
+
+### Usage in Code
+
+```go
+// Database
+pgsql.Get()              // Default database
+pgsql.Get("usercenter")  // Named database
+
+// Redis
+redis.Get()              // Default Redis
+redis.Get("cache")       // Named Redis instance
 ```
 
 ### Encrypt Sensitive Values
@@ -201,6 +247,10 @@ go run . serve -s all  # Start all modules
 
 ## Logging
 
+### Unified Logging System
+
+All logs go through the unified logger with colored console output and module-specific files:
+
 ```go
 import "server/pkg/logger"
 
@@ -211,7 +261,47 @@ log.Error("error %v", err)
 log.InfoCtx(ctx, "message with traceId")
 ```
 
-Logs are written to `logs/{module-name}/date.log`
+**Log Organization:**
+- Request logs: `logs/{module}/date.log` (auto-detected from URL)
+- SQL logs: `logs/sql/date.log` (all databases)
+- System logs: `logs/system/date.log`
+
+**Features:**
+- Colored console output with module names
+- Trace ID support for request tracking
+- Status-based log levels (2xx/3xx=INFO, 4xx=WARN, 5xx=ERROR)
+- Daily log rotation
+
+## Error Handling
+
+```go
+import "server/common/errors"
+
+// Create business errors
+err := errors.New(4001, "user not found")
+err := errors.Newf(4002, "invalid param: %s", param)
+
+// Wrap errors
+err := errors.Wrap(originalErr, 5001, "database error")
+
+// Common errors
+errors.ErrUnauthorized()    // 401
+errors.ErrForbidden()       // 403
+errors.ErrNotFound()        // 404
+errors.ErrServerError()     // 500
+```
+
+## Performance Optimization
+
+### String Conversion Cache
+
+```go
+import "server/pkg/util"
+
+// Cached conversion for integers 0-10000 (3-5x faster)
+str := strconv.Int64ToString(123)
+ids := strconv.Int64ToStringBatch([]int64{1, 2, 3})
+```
 
 ## License
 

@@ -11,6 +11,7 @@ type localCache struct {
 	mu      sync.RWMutex
 	maxSize int
 	ttl     time.Duration
+	stopCh  chan struct{}
 }
 
 type cacheItem struct {
@@ -23,6 +24,7 @@ func newLocalCache(maxSize int, ttl time.Duration) *localCache {
 		data:    make(map[string]*cacheItem),
 		maxSize: maxSize,
 		ttl:     ttl,
+		stopCh:  make(chan struct{}),
 	}
 	// Start cleanup goroutine
 	go c.cleanup()
@@ -82,11 +84,21 @@ func (c *localCache) cleanup() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.mu.Lock()
-		c.evict()
-		c.mu.Unlock()
+	for {
+		select {
+		case <-ticker.C:
+			c.mu.Lock()
+			c.evict()
+			c.mu.Unlock()
+		case <-c.stopCh:
+			return
+		}
 	}
+}
+
+// Close stops the cleanup goroutine
+func (c *localCache) Close() {
+	close(c.stopCh)
 }
 
 // Len returns cache entry count

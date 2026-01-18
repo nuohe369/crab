@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/nuohe369/crab/common"
@@ -15,6 +13,7 @@ import (
 	"github.com/nuohe369/crab/pkg"
 	"github.com/nuohe369/crab/pkg/cron"
 	"github.com/nuohe369/crab/pkg/json"
+	"github.com/nuohe369/crab/pkg/logger"
 	"github.com/nuohe369/crab/pkg/metrics"
 	"github.com/nuohe369/crab/pkg/pgsql"
 )
@@ -97,11 +96,61 @@ func migrateModels(targetModules []Module) {
 		return
 	}
 
-	// Execute migration
-	if err := pgsql.Get().Engine().Sync2(models...); err != nil {
-		log.Fatalf("Database migration failed: %v", err)
+	// Group models by database engine
+	type dbNamer interface {
+		DBName() string
 	}
-	log.Printf("Database migration completed, %d models migrated", len(models))
+
+	dbGroups := make(map[*pgsql.Client][]any)
+	var skippedModels []string
+
+	for _, md := range models {
+		var db *pgsql.Client
+
+		// Check if model specifies a database
+		if namer, ok := md.(dbNamer); ok {
+			dbName := namer.DBName()
+			if dbName != "" {
+				db = pgsql.Get(dbName)
+				if db == nil {
+					skippedModels = append(skippedModels, fmt.Sprintf("%T (database '%s' not configured)", md, dbName))
+					continue
+				}
+			} else {
+				// Model has DBName() but returns empty, use default
+				db = pgsql.Get()
+			}
+		} else {
+			// Model doesn't have DBName(), use default
+			db = pgsql.Get()
+		}
+
+		if db == nil {
+			skippedModels = append(skippedModels, fmt.Sprintf("%T (no default database)", md))
+			continue
+		}
+
+		dbGroups[db] = append(dbGroups[db], md)
+	}
+
+	// Report skipped models
+	if len(skippedModels) > 0 {
+		log.Printf("⚠ Skipped %d models:", len(skippedModels))
+		for _, model := range skippedModels {
+			log.Printf("  - %s", model)
+		}
+	}
+
+	// Execute migration for each database
+	totalMigrated := 0
+	for db, mds := range dbGroups {
+		if err := db.Engine().Sync2(mds...); err != nil {
+			log.Fatalf("Database migration failed: %v", err)
+		}
+		totalMigrated += len(mds)
+	}
+
+	log.Printf("Migrated %d models across %d databases", totalMigrated, len(dbGroups))
 }
 
 // initAfterMigrate performs initialization after database migration.
@@ -117,8 +166,9 @@ func Run(addr string) {
 // RunModules starts the specified modules. If moduleNames is nil or empty, all modules are started.
 func RunModules(moduleNames []string, addr string) {
 	app = fiber.New(fiber.Config{
-		JSONEncoder: json.Marshal,
-		JSONDecoder: json.Unmarshal,
+		DisableStartupMessage: true, // Disable Fiber's default startup message | 禁用 Fiber 的默认启动消息
+		JSONEncoder:           json.Marshal,
+		JSONDecoder:           json.Unmarshal,
 	})
 
 	initBase()
@@ -152,8 +202,31 @@ func RunModules(moduleNames []string, addr string) {
 		log.Fatal("No modules found to start")
 	}
 
+	// Validate module dependencies and filter out modules with missing dependencies
+	// 验证模块依赖并过滤掉缺少依赖的模块
+	strictMode := config.IsStrictDependencyCheck()
+	targetModules = ValidateAndFilterModules(targetModules, strictMode)
+
+	if len(targetModules) == 0 {
+		log.Fatal("❌ No modules available to start after dependency validation")
+	}
+
 	// Migrate models declared by modules
-	migrateModels(targetModules)
+	databases := config.GetDatabases()
+	// Check if any database has auto_migrate enabled
+	autoMigrate := false
+	for _, dbCfg := range databases {
+		if dbCfg.AutoMigrate {
+			autoMigrate = true
+			break
+		}
+	}
+
+	if autoMigrate {
+		migrateModels(targetModules)
+	} else {
+		log.Println("Database auto migration is disabled")
+	}
 
 	// Post-migration initialization
 	initAfterMigrate()
@@ -179,24 +252,13 @@ func RunModules(moduleNames []string, addr string) {
 	// Start cron scheduler
 	cron.Start()
 
-	// Start HTTP server
-	go app.Listen(addr)
-	log.Printf("Server started: %s (modules: %s)", addr, strings.Join(getModuleNames(targetModules), ", "))
+	// Print startup information | 打印启动信息
+	printStartupInfo(addr, targetModules)
 
-	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down...")
-	cron.Stop()
-	for i := len(targetModules) - 1; i >= 0; i-- {
-		if err := targetModules[i].Stop(); err != nil {
-			log.Printf("Module %s shutdown failed: %v", targetModules[i].Name(), err)
-		}
+	// Start HTTP server (blocking)
+	if err := app.Listen(addr); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
 	}
-	app.Shutdown()
-	log.Println("Server stopped")
 }
 
 // RunService starts a service by name as defined in the configuration file.
@@ -228,4 +290,30 @@ func getModuleNames(mods []Module) []string {
 		names[i] = m.Name()
 	}
 	return names
+}
+
+// printStartupInfo prints server startup information using our logger
+// printStartupInfo 使用我们的日志器打印服务器启动信息
+func printStartupInfo(addr string, modules []Module) {
+	serverLog := logger.NewSystem("server")
+
+	appCfg := config.GetApp()
+
+	serverLog.Info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	serverLog.Info("🚀 %s v%s", appCfg.Name, appCfg.Version)
+	serverLog.Info("📍 Address: %s", addr)
+	serverLog.Info("📦 Modules: %s", strings.Join(getModuleNames(modules), ", "))
+	serverLog.Info("🔧 Handlers: %d", app.HandlersCount())
+	serverLog.Info("🆔 PID: %d", os.Getpid())
+	serverLog.Info("🌍 Environment: %s", appCfg.Env)
+
+	// Show strict mode status | 显示严格模式状态
+	if config.IsStrictDependencyCheck() {
+		serverLog.Info("🛡️  Strict dependency check: enabled")
+	} else {
+		serverLog.Info("🔧 Strict dependency check: disabled")
+	}
+
+	serverLog.Info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	serverLog.Info("Server is ready to accept connections")
 }

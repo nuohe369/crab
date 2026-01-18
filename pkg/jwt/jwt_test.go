@@ -141,7 +141,7 @@ func TestConfigGetExpire(t *testing.T) {
 		{"24h", 24 * time.Hour},
 		{"1h", time.Hour},
 		{"30m", 30 * time.Minute},
-		{"", 24 * time.Hour},      // default
+		{"", 24 * time.Hour},        // default
 		{"invalid", 24 * time.Hour}, // default on parse error
 	}
 

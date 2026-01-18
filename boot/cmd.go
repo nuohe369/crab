@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/nuohe369/crab/common/config"
 	"github.com/nuohe369/crab/pkg/crypto"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -67,6 +67,15 @@ var listCmd = &cobra.Command{
 	},
 }
 
+var depsCmd = &cobra.Command{
+	Use:   "deps",
+	Short: "Show module dependencies",
+	Long:  `Show database dependencies for all registered modules`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runDeps()
+	},
+}
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version information",
@@ -79,19 +88,10 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Generate configuration file",
 	Long: `Generate configuration file:
-  init              Generate config.example.toml (without overwriting existing file)
-  init --force      Force overwrite config.example.toml
-  init --config     Generate config.toml (if it doesn't exist)`,
+  init         Generate config.toml with minimal required configuration
+  init --full  Generate config.example.toml with all available options`,
 	Run: func(cmd *cobra.Command, args []string) {
 		runInit()
-	},
-}
-
-var initMenuCmd = &cobra.Command{
-	Use:   "init-menu",
-	Short: "Generate menu configuration file menu.toml",
-	Run: func(cmd *cobra.Command, args []string) {
-		runInitMenu()
 	},
 }
 
@@ -104,8 +104,7 @@ var encryptCmd = &cobra.Command{
 }
 
 var encryptValue string
-var initForce bool
-var initConfig bool
+var initFull bool
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&addr, "addr", "a", "", "Listen address")
@@ -114,17 +113,16 @@ func init() {
 	serveCmd.Flags().StringVarP(&serviceName, "service", "s", "", "Service name (from config file)")
 	serveCmd.Flags().StringVarP(&moduleList, "modules", "m", "", "Module list (comma-separated)")
 
-	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Force overwrite")
-	initCmd.Flags().BoolVarP(&initConfig, "config", "c", false, "Generate config.toml")
+	initCmd.Flags().BoolVarP(&initFull, "full", "f", false, "Generate full configuration with all options")
 
 	encryptCmd.Flags().StringVarP(&encryptValue, "value", "v", "", "Value to encrypt")
 	encryptCmd.MarkFlagRequired("value")
 
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(depsCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(initMenuCmd)
 	rootCmd.AddCommand(encryptCmd)
 }
 
@@ -154,48 +152,157 @@ func runList() {
 	}
 }
 
+// runDeps shows module dependencies
+// runDeps 显示模块依赖
+func runDeps() {
+	// Load configuration
+	if secretKey != "" {
+		config.SetDecryptKey(secretKey)
+	}
+	config.MustLoad("config.toml")
+
+	// Initialize infrastructure to get database connections
+	// 初始化基础设施以获取数据库连接
+	initBase()
+
+	// Print module dependencies
+	// 打印模块依赖
+	PrintModuleDependencies(modules)
+}
+
 // runInit generates configuration file.
 func runInit() {
-	// Determine target file
-	configPath := "config.example.toml"
-	if initConfig {
+	var configPath string
+	var content string
+
+	if initFull {
+		// Generate full configuration example
+		configPath = "config.example.toml"
+		content = getFullConfig()
+	} else {
+		// Generate minimal required configuration
 		configPath = "config.toml"
+		content = getMinimalConfig()
 	}
 
 	// Check if file exists
-	if _, err := os.Stat(configPath); err == nil && !initForce {
-		fmt.Printf("%s already exists, use --force to overwrite\n", configPath)
+	if _, err := os.Stat(configPath); err == nil {
+		fmt.Printf("%s already exists, skipping generation\n", configPath)
+		fmt.Printf("Tip: Delete the file first if you want to regenerate it\n")
 		return
 	}
 
-	content := `# Crab Framework Configuration File
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		fmt.Printf("Failed to generate configuration file: %v\n", err)
+		return
+	}
+	fmt.Printf("%s generated successfully\n", configPath)
+
+	if !initFull {
+		fmt.Println("\nTip: Run 'init --full' to see all available configuration options")
+	}
+}
+
+// getMinimalConfig returns minimal required configuration
+func getMinimalConfig() string {
+	return `# Crab Framework Configuration File
+# This is the minimal required configuration to get started
 
 [app]
-name = "server"
+name = "crab"
 version = "0.1.0"
 env = "dev"  # dev: development, prod: production
+strict_dependency_check = true  # Strict dependency checking (true in prod by default)
 
 [server]
 addr = ":3000"
 
-# ==================== Database Configuration ====================
-[database]
+# ==================== Snowflake ID Generator ====================
+[snowflake]
+machine_id = 1  # Machine ID (0-1023), must be unique in distributed environment
+
+# ==================== Database Configuration (Required) ====================
+[database.default]
 host = "localhost"
 port = 5432
-user = "server"
-password = "server"
-db_name = "server"
+user = "crab"
+password = "crab"
+db_name = "crab"
+auto_migrate = true   # Auto migrate database schema
+show_sql = false      # Show SQL logs
 
-# ==================== Redis Configuration ====================
-[redis]
-# Standalone mode
+# ==================== Redis Configuration (Required) ====================
+[redis.default]
 addr = "localhost:6379"
 password = ""
 db = 0
-# Cluster mode (automatically switches when configured, addr and db will be ignored)
+
+# ==================== Service Configuration ====================
+# Define different service combinations, start with: serve -s <name>
+
+[[services]]
+name = "all"
+addr = ":3000"
+modules = ["testapi", "ws"]
+`
+}
+
+// getFullConfig returns full configuration with all options
+func getFullConfig() string {
+	return `# Crab Framework Configuration File
+# This file contains all available configuration options
+
+[app]
+name = "crab"
+version = "0.1.0"
+env = "dev"  # dev: development, prod: production
+strict_dependency_check = true  # Strict dependency checking (default: true in prod, false in dev)
+                                # When enabled, modules with missing database dependencies will not start
+
+[server]
+addr = ":3000"
+
+# ==================== Snowflake ID Generator ====================
+[snowflake]
+machine_id = 1  # Machine ID (0-1023), must be unique in distributed environment
+
+# ==================== Database Configuration (Required) ====================
+# You can configure multiple databases, first one will be the default
+[database.default]
+host = "localhost"
+port = 5432
+user = "crab"
+password = "crab"
+db_name = "crab"
+auto_migrate = true   # Auto migrate database schema
+show_sql = false      # Show SQL logs
+
+# Example: Additional database
+# [database.usercenter]
+# host = "localhost"
+# port = 5432
+# user = "crab"
+# password = "crab"
+# db_name = "crab_usercenter"
+# auto_migrate = true
+# show_sql = false
+
+# ==================== Redis Configuration (Required) ====================
+# Support multiple Redis instances, similar to database configuration
+[redis.default]
+addr = "localhost:6379"
+password = ""
+db = 0
+# Cluster mode (automatically switches when configured)
 # cluster = "host1:6379,host2:6379,host3:6379"
 
-# ==================== Message Queue Configuration ====================
+# Example: Additional Redis instance for caching
+# [redis.cache]
+# addr = "localhost:6380"
+# password = ""
+# db = 0
+
+# ==================== Message Queue Configuration (Optional) ====================
 [mq]
 driver = ""  # redis or rabbitmq, leave empty to disable
 
@@ -209,23 +316,23 @@ max_len = 10000  # Stream max length, 0 means unlimited
 [mq.rabbitmq]
 url = "amqp://guest:guest@localhost:5672/"
 
-# ==================== JWT Configuration ====================
+# ==================== JWT Configuration (Optional) ====================
 [jwt]
 secret = "your-jwt-secret-change-me"
 expire = "24h"
 
-# ==================== Tracing Configuration ====================
+# ==================== Tracing Configuration (Optional) ====================
 [trace]
-service_name = "server"
+service_name = "crab"
 endpoint = ""  # Leave empty to disable, e.g.: localhost:4318
 insecure = true
 
-# ==================== Metrics Configuration ====================
+# ==================== Metrics Configuration (Optional) ====================
 [metrics]
 enabled = false
 path = "/metrics"
 
-# ==================== Storage Configuration ====================
+# ==================== Storage Configuration (Optional) ====================
 [storage]
 driver = ""  # local, oss, s3, leave empty to disable
 
@@ -249,22 +356,23 @@ endpoint = ""  # Custom endpoint for MinIO, etc.
 base_url = ""
 
 # ==================== Service Configuration ====================
-# Define different service combinations, start with serve -s <name>
+# Define different service combinations, start with: serve -s <name>
 
 [[services]]
-name = "test"
-addr = ":3001"
+name = "all"
+addr = ":3000"
 modules = ["testapi", "ws"]
-`
-	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
-		fmt.Printf("Failed to generate configuration file: %v\n", err)
-		return
-	}
-	fmt.Printf("%s generated successfully\n", configPath)
 
-	if !initConfig {
-		fmt.Println("Tip: Copy to config.toml and modify the configuration before use")
-	}
+[[services]]
+name = "api"
+addr = ":3001"
+modules = ["testapi"]
+
+[[services]]
+name = "ws"
+addr = ":3002"
+modules = ["ws"]
+`
 }
 
 // runEncrypt encrypts configuration values.
@@ -282,9 +390,4 @@ func runEncrypt() {
 
 	fmt.Println("Encrypted result:")
 	fmt.Println(encrypted)
-}
-
-// runInitMenu generates menu configuration file (not needed in framework version).
-func runInitMenu() {
-	fmt.Println("Menu configuration is not needed in framework version")
 }

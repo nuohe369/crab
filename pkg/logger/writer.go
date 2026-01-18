@@ -11,10 +11,10 @@ const logDir = "logs"
 
 // Writer writes log files with daily rotation support
 type Writer struct {
-	module   string
-	file     *os.File
-	date     string
-	mu       sync.Mutex
+	module string
+	file   *os.File
+	date   string
+	mu     sync.Mutex
 }
 
 // NewWriter creates writer

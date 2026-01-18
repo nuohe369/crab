@@ -1,87 +1,55 @@
 # Crab Framework Configuration File
+# Copy this file to config.toml and modify the values
 
 [app]
-name = "server"
+name = "crab"
 version = "0.1.0"
 env = "dev"  # dev: development, prod: production
+strict_dependency_check = true 
 
 [server]
 addr = ":3000"
 
-# ==================== Database Configuration ====================
-[database]
+# ==================== Snowflake ID Generator ====================
+[snowflake]
+machine_id = 1  # Machine ID (0-1023), must be unique in distributed environment
+
+# ==================== Database Configuration (Required) ====================
+[database.default]
 host = "localhost"
 port = 5432
-user = "server"
-password = "server"
-db_name = "server"
+user = "your_username"
+password = "your_password"  # Use ENC(xxx) for encrypted password
+db_name = "crab"
+auto_migrate = true   # Auto migrate database schema
+show_sql = false      # Show SQL logs
 
-# ==================== Redis Configuration ====================
-[redis]
-# Standalone mode
+# Example: Additional database
+# [database.crab_usercenter]
+# host = "localhost"
+# port = 5432
+# user = "your_username"
+# password = "your_password"
+# db_name = "crab_usercenter"
+# auto_migrate = true
+# show_sql = false
+
+# ==================== Redis Configuration (Required) ====================
+[redis.default]
 addr = "localhost:6379"
-password = ""
+password = ""  # Use ENC(xxx) for encrypted password
 db = 0
-# Cluster mode (automatically switches when configured, addr and db will be ignored)
-# cluster = "host1:6379,host2:6379,host3:6379"
 
-# ==================== Message Queue Configuration ====================
-[mq]
-driver = ""  # redis or rabbitmq, leave empty to disable
-
-[mq.redis]
-addr = "localhost:6379"
-password = ""
-db = 0
-max_len = 10000  # Stream max length, 0 means unlimited
-# cluster = "host1:6379,host2:6379,host3:6379"
-
-[mq.rabbitmq]
-url = "amqp://guest:guest@localhost:5672/"
-
-# ==================== JWT Configuration ====================
-[jwt]
-secret = "your-jwt-secret-change-me"
-expire = "24h"
-
-# ==================== Tracing Configuration ====================
-[trace]
-service_name = "server"
-endpoint = ""  # Leave empty to disable, e.g.: localhost:4318
-insecure = true
-
-# ==================== Metrics Configuration ====================
-[metrics]
-enabled = false
-path = "/metrics"
-
-# ==================== Storage Configuration ====================
-[storage]
-driver = ""  # local, oss, s3, leave empty to disable
-
-[storage.local]
-root = "./uploads"
-base_url = "/uploads"  # For frontend-backend separation, configure full URL, e.g.: https://api.example.com/uploads
-
-[storage.oss]
-endpoint = ""
-access_key_id = ""
-access_key_secret = ""
-bucket = ""
-base_url = ""  # CDN domain
-
-[storage.s3]
-region = "us-east-1"
-access_key_id = ""
-secret_access_key = ""
-bucket = ""
-endpoint = ""  # Custom endpoint for MinIO, etc.
-base_url = ""
+# Example: Additional Redis instance for caching
+# [redis.cache]
+# addr = "localhost:6380"
+# password = ""
+# db = 0
 
 # ==================== Service Configuration ====================
-# Define different service combinations, start with serve -s <name>
+# Define different service combinations, start with: serve -s <name>
 
 [[services]]
-name = "test"
-addr = ":3001"
+name = "all"
+addr = ":3000"
 modules = ["testapi", "ws"]

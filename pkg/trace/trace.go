@@ -1,3 +1,5 @@
+// Package trace provides distributed tracing using OpenTelemetry
+// Package trace 提供使用 OpenTelemetry 的分布式追踪
 package trace
 
 import (
@@ -13,16 +15,18 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var tracer trace.Tracer
+var tracer trace.Tracer // Global tracer instance | 全局追踪器实例
 
-// Config tracing configuration
+// Config represents tracing configuration
+// Config 表示追踪配置
 type Config struct {
-	ServiceName string `toml:"service_name"`
-	Endpoint    string `toml:"endpoint"` // OTLP endpoint, e.g. localhost:4318
-	Insecure    bool   `toml:"insecure"`
+	ServiceName string `toml:"service_name"` // Service name | 服务名称
+	Endpoint    string `toml:"endpoint"`     // OTLP endpoint, e.g. localhost:4318 | OTLP 端点，例如 localhost:4318
+	Insecure    bool   `toml:"insecure"`     // Use insecure connection | 使用不安全连接
 }
 
-// Init initializes tracing
+// Init initializes tracing and returns a shutdown function
+// Init 初始化追踪并返回关闭函数
 func Init(cfg Config) (func(context.Context) error, error) {
 	opts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(cfg.Endpoint),
@@ -61,26 +65,31 @@ func Init(cfg Config) (func(context.Context) error, error) {
 }
 
 // Start creates a child span
+// Start 创建子 span
 func Start(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
 	return tracer.Start(ctx, name, opts...)
 }
 
-// SpanFromContext gets current span from ctx
+// SpanFromContext gets current span from context
+// SpanFromContext 从上下文获取当前 span
 func SpanFromContext(ctx context.Context) trace.Span {
 	return trace.SpanFromContext(ctx)
 }
 
-// AddEvent adds an event
+// AddEvent adds an event to the current span
+// AddEvent 向当前 span 添加事件
 func AddEvent(ctx context.Context, name string, attrs ...attribute.KeyValue) {
 	trace.SpanFromContext(ctx).AddEvent(name, trace.WithAttributes(attrs...))
 }
 
-// SetAttributes sets attributes
+// SetAttributes sets attributes on the current span
+// SetAttributes 在当前 span 上设置属性
 func SetAttributes(ctx context.Context, attrs ...attribute.KeyValue) {
 	trace.SpanFromContext(ctx).SetAttributes(attrs...)
 }
 
-// TraceID gets current traceId
+// TraceID gets current trace ID
+// TraceID 获取当前追踪 ID
 func TraceID(ctx context.Context) string {
 	span := trace.SpanFromContext(ctx)
 	if span.SpanContext().HasTraceID() {

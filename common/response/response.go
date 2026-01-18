@@ -34,15 +34,18 @@ const (
 
 // Business related codes (4000-4999)
 const (
-	CodeUserNotFound   Code = 4001 // user not found
-	CodePasswordWrong  Code = 4002 // wrong password
-	CodeUserDisabled   Code = 4003 // user disabled
-	CodeUserExists     Code = 4004 // user already exists
-	CodeBizError       Code = 4000 // general business error
-	CodeAuthError      Code = 4005 // authentication error
+	CodeUserNotFound  Code = 4001 // user not found
+	CodePasswordWrong Code = 4002 // wrong password
+	CodeUserDisabled  Code = 4003 // user disabled
+	CodeUserExists    Code = 4004 // user already exists
+	CodeBizError      Code = 4000 // general business error
+	CodeAuthError     Code = 4005 // authentication error
 )
 
 // Organization related codes (4100-4199)
+// Reserved for future organization module implementation
+// Uncomment when organization module is added
+/*
 const (
 	CodeOrgCodeExists        Code = 4100 // organization code already exists
 	CodeOrgNotFound          Code = 4101 // organization not found
@@ -63,6 +66,7 @@ const (
 	CodeOrgNotMember         Code = 4116 // not an organization member
 	CodeOrgUserNotFound      Code = 4117 // user not found
 )
+*/
 
 // System related codes (5000-5999)
 const (
@@ -74,46 +78,49 @@ const (
 
 // Error code message mapping
 var codeMsg = map[Code]string{
-	CodeSuccess:      "success",
-	CodeError:        "error",
-	CodeUnauth:       "Unauthenticated",
-	CodeTokenExpired: "Token expired",
-	CodeTokenInvalid: "Invalid token",
-	CodeForbid:       "Forbidden",
-	CodeParamError:   "Parameter error",
-	CodeParamMissing: "Parameter missing",
-	CodeParamInvalid: "Invalid parameter",
-	CodeNotFound:     "Resource not found",
-	CodeDuplicate:    "Resource duplicate",
-	CodeUserNotFound:  "User not found",
-	CodePasswordWrong: "Wrong password",
-	CodeUserDisabled:  "User disabled",
-	CodeUserExists:    "User already exists",
-	CodeBizError:      "Business error",
-	CodeAuthError:     "Authentication error",
+	CodeSuccess:         "success",
+	CodeError:           "error",
+	CodeUnauth:          "Unauthenticated",
+	CodeTokenExpired:    "Token expired",
+	CodeTokenInvalid:    "Invalid token",
+	CodeForbid:          "Forbidden",
+	CodeParamError:      "Parameter error",
+	CodeParamMissing:    "Parameter missing",
+	CodeParamInvalid:    "Invalid parameter",
+	CodeNotFound:        "Resource not found",
+	CodeDuplicate:       "Resource duplicate",
+	CodeUserNotFound:    "User not found",
+	CodePasswordWrong:   "Wrong password",
+	CodeUserDisabled:    "User disabled",
+	CodeUserExists:      "User already exists",
+	CodeBizError:        "Business error",
+	CodeAuthError:       "Authentication error",
 	CodeServerError:     "Server error",
 	CodeDBError:         "Database error",
 	CodeRedisError:      "Redis error",
 	CodeTooManyRequests: "Too many requests",
-	// Organization related
-	CodeOrgCodeExists:        "Organization code already exists",
-	CodeOrgNotFound:          "Organization not found",
-	CodeOrgPermissionDenied:  "Permission denied",
-	CodeOrgMemberFull:        "Organization member limit reached",
-	CodeOrgMemberExists:      "User is already a member",
-	CodeOrgInviteExpired:     "Invitation expired",
-	CodeOrgInviteUsed:        "Invitation already used",
-	CodeOrgInviteInvalid:     "Invalid invitation code",
-	CodeOrgCannotRemoveOwner: "Cannot remove owner",
-	CodeOrgOwnerCannotLeave:  "Owner cannot leave",
-	CodeOrgTargetNotMember:   "Target user is not a member",
-	CodeOrgCannotInviteOwner: "Cannot invite as owner",
-	CodeOrgDisabled:          "Organization disabled",
-	CodeOrgNotSelected:       "Organization not selected",
-	CodeOrgAlreadyMember:     "User is already a member",
-	CodeOrgMemberLimit:       "Member limit reached",
-	CodeOrgNotMember:         "Not an organization member",
-	CodeOrgUserNotFound:      "User not found",
+	// Organization related codes are commented out in const section
+	// Uncomment the mappings below when organization module is implemented
+	/*
+		CodeOrgCodeExists:        "Organization code already exists",
+		CodeOrgNotFound:          "Organization not found",
+		CodeOrgPermissionDenied:  "Permission denied",
+		CodeOrgMemberFull:        "Organization member limit reached",
+		CodeOrgMemberExists:      "User is already a member",
+		CodeOrgInviteExpired:     "Invitation expired",
+		CodeOrgInviteUsed:        "Invitation already used",
+		CodeOrgInviteInvalid:     "Invalid invitation code",
+		CodeOrgCannotRemoveOwner: "Cannot remove owner",
+		CodeOrgOwnerCannotLeave:  "Owner cannot leave",
+		CodeOrgTargetNotMember:   "Target user is not a member",
+		CodeOrgCannotInviteOwner: "Cannot invite as owner",
+		CodeOrgDisabled:          "Organization disabled",
+		CodeOrgNotSelected:       "Organization not selected",
+		CodeOrgAlreadyMember:     "User is already a member",
+		CodeOrgMemberLimit:       "Member limit reached",
+		CodeOrgNotMember:         "Not an organization member",
+		CodeOrgUserNotFound:      "User not found",
+	*/
 }
 
 // Msg returns the message for the error code.

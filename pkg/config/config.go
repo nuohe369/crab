@@ -1,3 +1,5 @@
+// Package config provides configuration file loading and hot-reload functionality
+// Package config 提供配置文件加载和热重载功能
 package config
 
 import (
@@ -14,24 +16,27 @@ import (
 )
 
 var (
-	decryptKey string
+	decryptKey string // Decryption key for encrypted configuration values | 加密配置值的解密密钥
 	// ErrEncryptedNoKey indicates configuration contains encrypted values but no decryption key was provided
+	// ErrEncryptedNoKey 表示配置包含加密值但未提供解密密钥
 	ErrEncryptedNoKey = errors.New("configuration contains encrypted values ENC(), please provide decryption key with -k parameter")
 )
 
 // SetDecryptKey sets the decryption key for encrypted configuration values.
+// SetDecryptKey 设置加密配置值的解密密钥
 func SetDecryptKey(key string) {
 	decryptKey = key
 }
 
 // Load loads a TOML configuration file into the target structure.
+// Load 将 TOML 配置文件加载到目标结构中
 func Load(path string, target any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 
-	// Check if configuration contains encrypted values but no key was provided
+	// Check if configuration contains encrypted values but no key was provided | 检查配置是否包含加密值但未提供密钥
 	if decryptKey == "" && strings.Contains(string(data), "ENC(") {
 		return ErrEncryptedNoKey
 	}
@@ -39,7 +44,7 @@ func Load(path string, target any) error {
 	if err := toml.Unmarshal(data, target); err != nil {
 		return err
 	}
-	// Decrypt encrypted fields
+	// Decrypt encrypted fields | 解密加密字段
 	if decryptKey != "" {
 		if err := decryptFields(reflect.ValueOf(target), decryptKey); err != nil {
 			return err
@@ -49,6 +54,7 @@ func Load(path string, target any) error {
 }
 
 // MustLoad loads configuration, exits on failure.
+// MustLoad 加载配置，失败时退出
 func MustLoad(path string, target any) {
 	if err := Load(path, target); err != nil {
 		log.Fatalf("Configuration loading failed: %v", err)
@@ -56,6 +62,7 @@ func MustLoad(path string, target any) {
 }
 
 // decryptFields recursively decrypts encrypted fields in a struct.
+// decryptFields 递归解密结构体中的加密字段
 func decryptFields(v reflect.Value, key string) error {
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -96,15 +103,17 @@ func decryptFields(v reflect.Value, key string) error {
 }
 
 // Watcher provides hot-reload functionality for configuration files.
+// Watcher 提供配置文件的热重载功能
 type Watcher struct {
-	path     string
-	target   any
-	mu       sync.RWMutex
-	watcher  *fsnotify.Watcher
-	onChange func()
+	path     string            // Configuration file path | 配置文件路径
+	target   any               // Configuration target structure | 配置目标结构
+	mu       sync.RWMutex      // Mutex for concurrent access | 并发访问互斥锁
+	watcher  *fsnotify.Watcher // File system watcher | 文件系统监视器
+	onChange func()            // Change callback | 变更回调
 }
 
 // NewWatcher creates a configuration watcher.
+// NewWatcher 创建配置监视器
 func NewWatcher(path string, target any) (*Watcher, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -126,11 +135,13 @@ func NewWatcher(path string, target any) (*Watcher, error) {
 }
 
 // OnChange sets the callback function for configuration changes.
+// OnChange 设置配置变更的回调函数
 func (w *Watcher) OnChange(fn func()) {
 	w.onChange = fn
 }
 
 // Start begins watching for configuration changes.
+// Start 开始监视配置变更
 func (w *Watcher) Start() error {
 	if err := w.watcher.Add(w.path); err != nil {
 		return err
@@ -141,6 +152,7 @@ func (w *Watcher) Start() error {
 }
 
 // Stop stops watching for configuration changes.
+// Stop 停止监视配置变更
 func (w *Watcher) Stop() error {
 	return w.watcher.Close()
 }
@@ -152,7 +164,7 @@ func (w *Watcher) watch() {
 			if !ok {
 				return
 			}
-			// Handle write and create events (some editors delete then create)
+			// Handle write and create events (some editors delete then create) | 处理写入和创建事件（某些编辑器会先删除再创建）
 			if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
 				w.reload()
 				if w.onChange != nil {
@@ -174,6 +186,7 @@ func (w *Watcher) reload() error {
 }
 
 // Get returns the configuration (thread-safe).
+// Get 返回配置（线程安全）
 func (w *Watcher) Get() any {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -181,6 +194,7 @@ func (w *Watcher) Get() any {
 }
 
 // DecryptValue decrypts a single value.
+// DecryptValue 解密单个值
 func DecryptValue(value string) string {
 	if decryptKey == "" || !crypto.IsEncrypted(value) {
 		return value
@@ -192,11 +206,13 @@ func DecryptValue(value string) string {
 }
 
 // EncryptValue encrypts a single value.
+// EncryptValue 加密单个值
 func EncryptValue(value, key string) (string, error) {
 	return crypto.Encrypt(value, key)
 }
 
 // IsEncrypted checks if a value is encrypted.
+// IsEncrypted 检查值是否已加密
 func IsEncrypted(value string) bool {
 	return strings.HasPrefix(value, "ENC(") && strings.HasSuffix(value, ")")
 }

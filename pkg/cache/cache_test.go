@@ -11,7 +11,7 @@ func TestLocalCache(t *testing.T) {
 
 	// Test set and get
 	cache.set("key1", []byte("value1"))
-	
+
 	val, ok := cache.get("key1")
 	if !ok {
 		t.Error("Expected to find key1")

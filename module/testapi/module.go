@@ -2,6 +2,7 @@ package testapi
 
 import (
 	"github.com/nuohe369/crab/boot"
+	"github.com/nuohe369/crab/common/model"
 	"github.com/nuohe369/crab/module/testapi/internal/handler"
 )
 
@@ -16,7 +17,11 @@ func (m *Module) Name() string {
 }
 
 func (m *Module) Models() []any {
-	return nil
+	return []any{
+		new(model.User),     // crab_usercenter 数据库
+		new(model.Category), // crab_business 数据库
+		new(model.Article),  // crab_business 数据库
+	}
 }
 
 func (m *Module) Init(ctx *boot.ModuleContext) error {

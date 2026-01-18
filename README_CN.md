@@ -8,6 +8,19 @@
 
 ![架构图](docs/architecture.jpg)
 
+## 特性
+
+- ✅ **模块化架构** - 清晰的分层设计与依赖倒置
+- ✅ **多数据库支持** - 多个 PostgreSQL 和 Redis 实例
+- ✅ **模块依赖管理** - 自动验证，支持严格/宽松模式
+- ✅ **统一日志系统** - 彩色控制台输出 + 模块特定日志文件
+- ✅ **错误管理** - 完善的错误码系统
+- ✅ **性能优化** - 字符串转换缓存、连接池
+- ✅ **双语注释** - 中英文代码文档
+- ✅ **灵活部署** - 同一代码库支持单体或微服务
+- ✅ **热重载** - 配置热重载与加密支持
+- ✅ **完善测试** - 40+ 单元测试，良好覆盖率
+
 ## 快速开始
 
 ```bash
@@ -16,6 +29,7 @@ go run . serve             # 启动所有模块
 go run . serve -s api      # 按服务名启动
 go run . serve -m testapi  # 按模块名启动
 go run . list              # 列出模块和服务
+go run . deps              # 显示模块依赖
 ```
 
 ## 项目结构
@@ -82,24 +96,56 @@ go run . list              # 列出模块和服务
 
 ## 配置
 
+### 多数据库支持
+
 ```toml
 # config.toml
-[database]
+[app]
+name = "crab"
+env = "dev"
+strict_dependency_check = true  # 验证模块依赖
+
+# 多个 PostgreSQL 数据库
+[database.default]
 host = "localhost"
 port = 5432
 user = "postgres"
 password = "ENC(xxxxx...)"  # 加密值
-dbname = "crab"
+db_name = "crab"
+auto_migrate = true
+show_sql = false
 
-[redis]
+[database.usercenter]
+host = "localhost"
+db_name = "crab_usercenter"
+auto_migrate = true
+
+# 多个 Redis 实例
+[redis.default]
 addr = "localhost:6379"
 password = ""
 db = 0
+
+[redis.cache]
+addr = "localhost:6380"
+db = 1
 
 [[services]]
 name = "api"
 addr = ":3000"
 modules = ["testapi", "ws"]
+```
+
+### 代码中使用
+
+```go
+// 数据库
+pgsql.Get()              // 默认数据库
+pgsql.Get("usercenter")  // 命名数据库
+
+// Redis
+redis.Get()              // 默认 Redis
+redis.Get("cache")       // 命名 Redis 实例
 ```
 
 ### 加密敏感值
@@ -201,6 +247,10 @@ go run . serve -s all  # 启动所有模块
 
 ## 日志
 
+### 统一日志系统
+
+所有日志通过统一日志器，带颜色的控制台输出和模块特定的文件：
+
 ```go
 import "server/pkg/logger"
 
@@ -211,7 +261,47 @@ log.Error("错误 %v", err)
 log.InfoCtx(ctx, "带 traceId 的消息")
 ```
 
-日志写入 `logs/{模块名}/日期.log`
+**日志组织：**
+- 请求日志：`logs/{模块}/日期.log`（从 URL 自动检测）
+- SQL 日志：`logs/sql/日期.log`（所有数据库）
+- 系统日志：`logs/system/日期.log`
+
+**特性：**
+- 带模块名的彩色控制台输出
+- 链路 ID 支持请求追踪
+- 基于状态的日志级别（2xx/3xx=INFO，4xx=WARN，5xx=ERROR）
+- 按日分割日志
+
+## 错误处理
+
+```go
+import "server/common/errors"
+
+// 创建业务错误
+err := errors.New(4001, "用户未找到")
+err := errors.Newf(4002, "无效参数: %s", param)
+
+// 包装错误
+err := errors.Wrap(originalErr, 5001, "数据库错误")
+
+// 常用错误
+errors.ErrUnauthorized()    // 401
+errors.ErrForbidden()       // 403
+errors.ErrNotFound()        // 404
+errors.ErrServerError()     // 500
+```
+
+## 性能优化
+
+### 字符串转换缓存
+
+```go
+import "server/pkg/util"
+
+// 缓存 0-10000 的整数转换（快 3-5 倍）
+str := strconv.Int64ToString(123)
+ids := strconv.Int64ToStringBatch([]int64{1, 2, 3})
+```
 
 ## 许可证
 

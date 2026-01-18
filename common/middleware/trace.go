@@ -5,7 +5,8 @@ import (
 	"github.com/nuohe369/crab/pkg/trace"
 )
 
-// Trace returns a distributed tracing middleware.
+// Trace returns a distributed tracing middleware
+// Trace 返回分布式追踪中间件
 func Trace() fiber.Handler {
 	return trace.FiberMiddleware()
 }

@@ -1,3 +1,5 @@
+// Package common provides common business layer functionality
+// common 包提供通用业务层功能
 package common
 
 import (
@@ -7,10 +9,11 @@ import (
 
 var log = logger.NewSystem("common")
 
-// Init initializes the common business layer.
+// Init initializes the common business layer
+// Init 初始化通用业务层
 func Init() {
 	log.Info("Initializing common business layer...")
 
-	// Initialize WebSocket service
+	// Initialize WebSocket service | 初始化 WebSocket 服务
 	service.InitWS()
 }
