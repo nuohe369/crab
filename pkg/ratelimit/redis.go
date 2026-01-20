@@ -9,7 +9,7 @@ import (
 
 // redisLimiter Redis rate limiter (sliding window)
 type redisLimiter struct {
-	rdb    *redis.Client
+	rdb    redis.UniversalClient
 	prefix string
 }
 
@@ -20,6 +20,15 @@ func newRedisLimiter(addr, password string, db int, prefix string) *redisLimiter
 		DB:       db,
 	})
 	return &redisLimiter{rdb: rdb, prefix: prefix}
+}
+
+// NewRedisWithClient creates a Redis rate limiter with existing client
+// NewRedisWithClient 使用现有客户端创建 Redis 速率限制器
+func NewRedisWithClient(client redis.UniversalClient, prefix string) *redisLimiter {
+	if prefix == "" {
+		prefix = "ratelimit:"
+	}
+	return &redisLimiter{rdb: client, prefix: prefix}
 }
 
 // Lua script: sliding window rate limiting

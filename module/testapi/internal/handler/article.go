@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"github.com/nuohe369/crab/common/errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nuohe369/crab/common/model"
 	"github.com/nuohe369/crab/common/request"
 	"github.com/nuohe369/crab/common/response"
+	"github.com/nuohe369/crab/module/testapi/internal/vo"
+	"github.com/nuohe369/crab/pkg/snowflake"
 	"github.com/nuohe369/crab/pkg/util"
 )
 
@@ -25,17 +28,17 @@ func SetupArticle(router fiber.Router) {
 func CreateArticle(c *fiber.Ctx) error {
 	var req request.CreateArticleReq
 	if err := c.BodyParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
-	userID := util.MustStringToInt64(req.UserID)
-	categoryID := util.MustStringToInt64(req.CategoryID)
+	userID := snowflake.SnowflakeID(util.MustStringToInt64(req.UserID))
+	categoryID := snowflake.SnowflakeID(util.MustStringToInt64(req.CategoryID))
 
-	if userID == 0 || categoryID == 0 || req.Title == "" {
-		return response.FailMsg(c, response.CodeParamMissing, "user_id, category_id, title required")
+	if userID.IsZero() || categoryID.IsZero() || req.Title == "" {
+		return errors.New(response.CodeParamMissing, "user_id, category_id, title required")
 	}
 
-	article := &model.Article{
+	article := &model.ExampleArticle{
 		UserID:     userID,
 		CategoryID: categoryID,
 		Title:      req.Title,
@@ -45,11 +48,11 @@ func CreateArticle(c *fiber.Ctx) error {
 
 	_, err := model.GetDB(article).Insert(article)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, fiber.Map{
-		"id": util.Int64ToString(article.ID),
+		"id": article.ID.String(),
 	})
 }
 
@@ -59,19 +62,19 @@ func CreateArticle(c *fiber.Ctx) error {
 func GetArticle(c *fiber.Ctx) error {
 	id := util.MustStringToInt64(c.Params("id"))
 	if id == 0 {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
-	article := &model.Article{}
+	article := &model.ExampleArticle{}
 	has, err := model.GetDB(article).ID(id).Get(article)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 	if !has {
-		return response.FailCode(c, response.CodeNotFound)
+		return errors.ErrNotFound()
 	}
 
-	return response.OK(c, toArticleResp(article))
+	return response.OK(c, vo.ToArticleVO(article))
 }
 
 // UpdateArticle updates an article
@@ -80,20 +83,20 @@ func GetArticle(c *fiber.Ctx) error {
 func UpdateArticle(c *fiber.Ctx) error {
 	var req request.UpdateArticleReq
 	if err := c.BodyParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
 	id := util.MustStringToInt64(req.ID)
 	if id == 0 {
-		return response.FailMsg(c, response.CodeParamMissing, "id required")
+		return errors.New(response.CodeParamMissing, "id required")
 	}
 
-	article := &model.Article{}
+	article := &model.ExampleArticle{}
 	cols := []string{}
 
 	if req.CategoryID != "" {
-		categoryID := util.MustStringToInt64(req.CategoryID)
-		if categoryID > 0 {
+		categoryID := snowflake.SnowflakeID(util.MustStringToInt64(req.CategoryID))
+		if categoryID.Valid() {
 			article.CategoryID = categoryID
 			cols = append(cols, "category_id")
 		}
@@ -112,12 +115,12 @@ func UpdateArticle(c *fiber.Ctx) error {
 	}
 
 	if len(cols) == 0 {
-		return response.FailMsg(c, response.CodeParamMissing, "nothing to update")
+		return errors.New(response.CodeParamMissing, "nothing to update")
 	}
 
 	_, err := model.GetDB(article).ID(id).Cols(cols...).Update(article)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, nil)
@@ -129,13 +132,13 @@ func UpdateArticle(c *fiber.Ctx) error {
 func DeleteArticle(c *fiber.Ctx) error {
 	id := util.MustStringToInt64(c.Params("id"))
 	if id == 0 {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
-	article := &model.Article{}
+	article := &model.ExampleArticle{}
 	_, err := model.GetDB(article).ID(id).Delete(article)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, nil)
@@ -147,23 +150,23 @@ func DeleteArticle(c *fiber.Ctx) error {
 func ListArticle(c *fiber.Ctx) error {
 	var req request.ListArticleReq
 	if err := c.QueryParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
-	article := &model.Article{}
+	article := &model.ExampleArticle{}
 	session := model.GetDB(article).NewSession()
 	defer session.Close()
 
 	// Build query conditions | 构建查询条件
 	if req.UserID != "" {
-		userID := util.MustStringToInt64(req.UserID)
-		if userID > 0 {
+		userID := snowflake.SnowflakeID(util.MustStringToInt64(req.UserID))
+		if userID.Valid() {
 			session.Where("user_id = ?", userID)
 		}
 	}
 	if req.CategoryID != "" {
-		categoryID := util.MustStringToInt64(req.CategoryID)
-		if categoryID > 0 {
+		categoryID := snowflake.SnowflakeID(util.MustStringToInt64(req.CategoryID))
+		if categoryID.Valid() {
 			session.Where("category_id = ?", categoryID)
 		}
 	}
@@ -171,10 +174,10 @@ func ListArticle(c *fiber.Ctx) error {
 		session.Where("status = ?", *req.Status)
 	}
 
-	var list []model.Article
+	var list []model.ExampleArticle
 	total, err := session.Count(article)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	err = session.
@@ -182,42 +185,8 @@ func ListArticle(c *fiber.Ctx) error {
 		Desc("created_at").
 		Find(&list)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
-	return response.OKList(c, toArticleRespList(list), total, req.GetPage(), req.GetSize())
-}
-
-// ================ Response ================
-
-type articleResp struct {
-	ID         string `json:"id"`
-	UserID     string `json:"user_id"`
-	CategoryID string `json:"category_id"`
-	Title      string `json:"title"`
-	Content    string `json:"content"`
-	ViewCount  int64  `json:"view_count"`
-	Status     int    `json:"status"`
-	CreatedAt  string `json:"created_at"`
-}
-
-func toArticleResp(a *model.Article) articleResp {
-	return articleResp{
-		ID:         util.Int64ToString(a.ID),
-		UserID:     util.Int64ToString(a.UserID),
-		CategoryID: util.Int64ToString(a.CategoryID),
-		Title:      a.Title,
-		Content:    a.Content,
-		ViewCount:  a.ViewCount,
-		Status:     a.Status,
-		CreatedAt:  a.CreatedAt.Format("2006-01-02 15:04:05"),
-	}
-}
-
-func toArticleRespList(list []model.Article) []articleResp {
-	result := make([]articleResp, len(list))
-	for i, a := range list {
-		result[i] = toArticleResp(&a)
-	}
-	return result
+	return response.OKList(c, vo.ToArticleVOList(list), total, req.GetPage(), req.GetSize())
 }

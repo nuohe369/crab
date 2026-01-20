@@ -11,7 +11,7 @@ import (
 	"github.com/nuohe369/crab/pkg/ws"
 )
 
-var log = logger.NewWithName[struct{}]("ws.service")
+var log = logger.NewWithName("ws.service")
 
 func Setup(router fiber.Router) {
 	router.Get("/service", websocket.New(handleWS))

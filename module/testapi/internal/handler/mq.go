@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/nuohe369/crab/common/errors"
 	"context"
 	"encoding/json"
 	"log"
@@ -88,7 +89,7 @@ func MQPublish(c *fiber.Ctx) error {
 
 	err := mq.Publish(context.Background(), "testapi:demo", payload)
 	if err != nil {
-		return response.FailMsg(c, response.CodeServerError, err.Error())
+		return errors.Wrap(response.CodeServerError, err)
 	}
 
 	return response.OK(c, fiber.Map{
@@ -115,7 +116,7 @@ func MQPublishDelay(c *fiber.Ctx) error {
 	delay := time.Duration(delaySec) * time.Second
 	err := mq.PublishDelay(context.Background(), "testapi:demo", payload, delay)
 	if err != nil {
-		return response.FailMsg(c, response.CodeServerError, err.Error())
+		return errors.Wrap(response.CodeServerError, err)
 	}
 
 	executeAt := time.Now().Add(delay)

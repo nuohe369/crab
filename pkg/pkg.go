@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 
-	"github.com/nuohe369/crab/common/config"
 	"github.com/nuohe369/crab/pkg/cache"
 	"github.com/nuohe369/crab/pkg/cron"
 	"github.com/nuohe369/crab/pkg/jwt"
@@ -20,13 +19,24 @@ import (
 
 var traceShutdown func(context.Context) error
 
-// Init initializes the infrastructure layer.
-func Init() {
+// Config holds all infrastructure configuration
+type Config struct {
+	SnowflakeMachineID int64
+	Databases          map[string]pgsql.Config
+	Redis              map[string]redis.Config
+	MQ                 mq.Config
+	JWT                jwt.Config
+	Metrics            metrics.Config
+	Storage            storage.Config
+	Trace              trace.Config
+}
+
+// Init initializes the infrastructure layer with provided configuration.
+func Init(cfg Config) {
 	log.Println("Initializing pkg infrastructure...")
 
 	// Initialize Snowflake ID generator
-	snowflakeCfg := config.GetSnowflake()
-	machineID := snowflakeCfg.MachineID
+	machineID := cfg.SnowflakeMachineID
 	if machineID == 0 {
 		machineID = 1 // Default to 1 if not configured
 	}
@@ -36,8 +46,7 @@ func Init() {
 	log.Println("  ✓ Snowflake initialized")
 
 	// Initialize databases (required)
-	databases := config.GetDatabases()
-	if len(databases) == 0 {
+	if len(cfg.Databases) == 0 {
 		log.Fatal("No database configured")
 	}
 
@@ -45,7 +54,7 @@ func Init() {
 	var defaultInitialized bool
 	var defaultName string
 	for _, name := range []string{"default", ""} {
-		if cfg, ok := databases[name]; ok {
+		if cfg, ok := cfg.Databases[name]; ok {
 			pgsql.MustInit(cfg)
 			if name == "" {
 				log.Printf("  ✓ PostgreSQL initialized (default)")
@@ -60,8 +69,8 @@ func Init() {
 
 	// If no default found, use first database as default
 	if !defaultInitialized {
-		for name, cfg := range databases {
-			pgsql.MustInit(cfg)
+		for name, dbCfg := range cfg.Databases {
+			pgsql.MustInit(dbCfg)
 			log.Printf("  ✓ PostgreSQL initialized (default: %s)", name)
 			defaultName = name
 			break
@@ -69,8 +78,8 @@ func Init() {
 	}
 
 	// Register all databases by name (including default)
-	for name, cfg := range databases {
-		if err := pgsql.InitNamed(name, cfg); err != nil {
+	for name, dbCfg := range cfg.Databases {
+		if err := pgsql.InitNamed(name, dbCfg); err != nil {
 			log.Fatalf("PostgreSQL initialization failed (%s): %v", name, err)
 		}
 		// Don't log the default database again
@@ -80,17 +89,20 @@ func Init() {
 	}
 
 	// Set logger for all databases after initialization | 初始化完成后为所有数据库设置日志器
-	pgsql.SetLogger(logger.NewWithName[struct{}]("sql"))
+	pgsql.SetLogger(logger.NewWithName("sql"))
+
+	// SnowflakeID converter is automatically recognized by XORM through FromDB/ToDB methods
+	// SnowflakeID 转换器通过 FromDB/ToDB 方法被 XORM 自动识别
+	log.Println("  ✓ SnowflakeID converter enabled (automatic)")
 
 	// Initialize Redis (required)
-	redisInstances := config.GetRedisInstances()
-	if len(redisInstances) == 0 {
+	if len(cfg.Redis) == 0 {
 		log.Fatal("No Redis configured")
 	}
 
 	// Initialize all Redis instances
-	for name, cfg := range redisInstances {
-		if err := redis.InitNamed(name, cfg); err != nil {
+	for name, redisCfg := range cfg.Redis {
+		if err := redis.InitNamed(name, redisCfg); err != nil {
 			log.Fatalf("Redis initialization failed (%s): %v", name, err)
 		}
 		if name == "default" || name == "" {
@@ -109,9 +121,8 @@ func Init() {
 	log.Println("  ✓ Cron initialized")
 
 	// Initialize message queue (optional)
-	mqCfg := config.GetMQ()
-	if mqCfg.Driver != "" {
-		if err := mq.Init(mqCfg); err != nil {
+	if cfg.MQ.Driver != "" {
+		if err := mq.Init(cfg.MQ); err != nil {
 			log.Printf("  ⚠ Message queue initialization failed: %v", err)
 		} else {
 			log.Println("  ✓ Message queue initialized")
@@ -121,27 +132,24 @@ func Init() {
 	}
 
 	// Initialize JWT (optional)
-	jwtCfg := config.GetJWT()
-	if jwtCfg.Secret != "" {
-		jwt.Init(jwtCfg)
+	if cfg.JWT.Secret != "" {
+		jwt.Init(cfg.JWT)
 		log.Println("  ✓ JWT initialized")
 	} else {
 		log.Println("  - JWT not configured, skipping")
 	}
 
 	// Initialize metrics (optional)
-	metricsCfg := config.GetMetrics()
-	if metricsCfg.Enabled {
-		metrics.Init(metricsCfg)
+	if cfg.Metrics.Enabled {
+		metrics.Init(cfg.Metrics)
 		log.Println("  ✓ Metrics initialized")
 	} else {
 		log.Println("  - Metrics not enabled, skipping")
 	}
 
 	// Initialize storage (optional)
-	storageCfg := config.GetStorage()
-	if storageCfg.Driver != "" {
-		if err := storage.Init(storageCfg); err != nil {
+	if cfg.Storage.Driver != "" {
+		if err := storage.Init(cfg.Storage); err != nil {
 			log.Printf("  ⚠ Storage initialization failed: %v", err)
 		} else {
 			log.Println("  ✓ Storage initialized")
@@ -151,9 +159,8 @@ func Init() {
 	}
 
 	// Initialize distributed tracing (optional)
-	traceCfg := config.GetTrace()
-	if traceCfg.Endpoint != "" {
-		shutdown, err := trace.Init(traceCfg)
+	if cfg.Trace.Endpoint != "" {
+		shutdown, err := trace.Init(cfg.Trace)
 		if err != nil {
 			log.Printf("  ⚠ Trace initialization failed: %v", err)
 		} else {
@@ -163,7 +170,7 @@ func Init() {
 			injected := make(map[*pgsql.Client]bool)
 
 			// Inject to all named databases
-			for name := range databases {
+			for name := range cfg.Databases {
 				if db := pgsql.Get(name); db != nil && !injected[db] {
 					db.AddHook(hook)
 					injected[db] = true

@@ -157,6 +157,19 @@ func New(cfg Config) (*Client, error) {
 		clusterClient := redis.NewClusterClient(&redis.ClusterOptions{
 			Addrs:    addrs,
 			Password: cfg.Password,
+			
+			// Connection pool configuration | 连接池配置
+			PoolSize:           100,                   // Connection pool size | 连接池大小
+			MinIdleConns:       10,                    // Minimum idle connections | 最小空闲连接
+			MaxIdleConns:       50,                    // Maximum idle connections | 最大空闲连接
+			ConnMaxIdleTime:    10 * time.Minute,      // Idle connection timeout | 空闲连接超时
+			ConnMaxLifetime:    time.Hour,             // Connection max lifetime | 连接最大生命周期
+			PoolTimeout:        4 * time.Second,       // Get connection timeout | 获取连接超时
+			
+			// Retry configuration | 重试配置
+			MaxRetries:         3,                     // Max retry attempts | 最大重试次数
+			MinRetryBackoff:    8 * time.Millisecond,  // Min retry backoff | 最小重试间隔
+			MaxRetryBackoff:    512 * time.Millisecond, // Max retry backoff | 最大重试间隔
 		})
 
 		if err := clusterClient.Ping(ctx).Err(); err != nil {
@@ -171,6 +184,19 @@ func New(cfg Config) (*Client, error) {
 			Addr:     cfg.Addr,
 			Password: cfg.Password,
 			DB:       cfg.DB,
+			
+			// Connection pool configuration | 连接池配置
+			PoolSize:           100,                   // Connection pool size | 连接池大小
+			MinIdleConns:       10,                    // Minimum idle connections | 最小空闲连接
+			MaxIdleConns:       50,                    // Maximum idle connections | 最大空闲连接
+			ConnMaxIdleTime:    10 * time.Minute,      // Idle connection timeout | 空闲连接超时
+			ConnMaxLifetime:    time.Hour,             // Connection max lifetime | 连接最大生命周期
+			PoolTimeout:        4 * time.Second,       // Get connection timeout | 获取连接超时
+			
+			// Retry configuration | 重试配置
+			MaxRetries:         3,                     // Max retry attempts | 最大重试次数
+			MinRetryBackoff:    8 * time.Millisecond,  // Min retry backoff | 最小重试间隔
+			MaxRetryBackoff:    512 * time.Millisecond, // Max retry backoff | 最大重试间隔
 		})
 
 		if err := standaloneClient.Ping(ctx).Err(); err != nil {

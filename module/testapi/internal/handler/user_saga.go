@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/nuohe369/crab/common/errors"
 	"context"
 
 	"github.com/gofiber/fiber/v2"
@@ -27,15 +28,15 @@ import (
 func DeleteUserWithSaga(c *fiber.Ctx) error {
 	id := util.MustStringToInt64(c.Params("id"))
 	if id == 0 {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数错误")
 	}
 
 	// Get failure simulation parameter | 获取失败模拟参数
 	failAt := c.Query("fail_at", "")
 
 	// Data for compensation | 用于补偿的数据
-	var deletedArticles []model.Article
-	var deletedUser *model.User
+	var deletedArticles []model.ExampleArticle
+	var deletedUser *model.ExampleUser
 
 	// Create Saga transaction | 创建 Saga 事务
 	saga := transaction.NewSaga().
@@ -44,7 +45,7 @@ func DeleteUserWithSaga(c *fiber.Ctx) error {
 		AddStep(transaction.SagaStep{
 			Name: "delete_user_articles",
 			Execute: func(ctx context.Context) error {
-				article := &model.Article{}
+				article := &model.ExampleArticle{}
 
 				// Query articles to be deleted (for compensation)
 				// 查询要删除的文章（用于补偿）
@@ -63,14 +64,14 @@ func DeleteUserWithSaga(c *fiber.Ctx) error {
 				// Delete articles | 删除文章
 				_, err = model.GetDB(article).
 					Where("user_id = ?", id).
-					Delete(&model.Article{})
+					Delete(&model.ExampleArticle{})
 				return err
 			},
 			Compensate: func(ctx context.Context) error {
 				// Compensation: restore deleted articles
 				// 补偿：恢复删除的文章
 				if len(deletedArticles) > 0 {
-					article := &model.Article{}
+					article := &model.ExampleArticle{}
 					for _, a := range deletedArticles {
 						_, err := model.GetDB(article).Insert(&a)
 						if err != nil {
@@ -86,7 +87,7 @@ func DeleteUserWithSaga(c *fiber.Ctx) error {
 		AddStep(transaction.SagaStep{
 			Name: "delete_user",
 			Execute: func(ctx context.Context) error {
-				user := &model.User{}
+				user := &model.ExampleUser{}
 
 				// Query user info (for compensation)
 				// 查询用户信息（用于补偿）
@@ -112,7 +113,7 @@ func DeleteUserWithSaga(c *fiber.Ctx) error {
 				// Compensation: restore deleted user
 				// 补偿：恢复删除的用户
 				if deletedUser != nil {
-					user := &model.User{}
+					user := &model.ExampleUser{}
 					_, err := model.GetDB(user).Insert(deletedUser)
 					return err
 				}
@@ -133,7 +134,7 @@ func DeleteUserWithSaga(c *fiber.Ctx) error {
 
 	// Execute Saga | 执行 Saga
 	if err := saga.Execute(c.Context()); err != nil {
-		return response.FailMsg(c, response.CodeServerError, err.Error())
+		return errors.Wrap(response.CodeServerError, err)
 	}
 
 	return response.OK(c, fiber.Map{

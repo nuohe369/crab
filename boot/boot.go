@@ -1,15 +1,22 @@
 package boot
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/nuohe369/crab/common"
 	"github.com/nuohe369/crab/common/config"
+	bizErrors "github.com/nuohe369/crab/common/errors"
 	"github.com/nuohe369/crab/common/middleware"
+	"github.com/nuohe369/crab/common/response"
 	"github.com/nuohe369/crab/pkg"
 	"github.com/nuohe369/crab/pkg/cron"
 	"github.com/nuohe369/crab/pkg/json"
@@ -68,7 +75,23 @@ func initBase() {
 	}
 	config.MustLoad("config.toml")
 
-	pkg.Init()
+	// Initialize logger configuration | 初始化日志器配置
+	logger.SetConfig(config.GetLogger())
+
+	// Build pkg.Config from common/config
+	snowflakeCfg := config.GetSnowflake()
+	pkgCfg := pkg.Config{
+		SnowflakeMachineID: snowflakeCfg.MachineID,
+		Databases:          config.GetDatabases(),
+		Redis:              config.GetRedisInstances(),
+		MQ:                 config.GetMQ(),
+		JWT:                config.GetJWT(),
+		Metrics:            config.GetMetrics(),
+		Storage:            config.GetStorage(),
+		Trace:              config.GetTrace(),
+	}
+
+	pkg.Init(pkgCfg)
 	common.Init()
 }
 
@@ -169,6 +192,19 @@ func RunModules(moduleNames []string, addr string) {
 		DisableStartupMessage: true, // Disable Fiber's default startup message | 禁用 Fiber 的默认启动消息
 		JSONEncoder:           json.Marshal,
 		JSONDecoder:           json.Unmarshal,
+		ErrorHandler:          customErrorHandler, // Custom error handler | 自定义错误处理器
+		
+		// High concurrency configuration | 高并发配置
+		Prefork:               false,                // Multi-process mode (enable in production) | 多进程模式（生产环境可开启）
+		ReadBufferSize:        8192,                 // Read buffer size | 读缓冲区大小
+		WriteBufferSize:       8192,                 // Write buffer size | 写缓冲区大小
+		ReadTimeout:           10 * time.Second,     // Read timeout | 读超时
+		WriteTimeout:          10 * time.Second,     // Write timeout | 写超时
+		IdleTimeout:           120 * time.Second,    // Idle timeout | 空闲超时
+		BodyLimit:             4 * 1024 * 1024,      // 4MB body limit | 4MB 请求体限制
+		Concurrency:           256 * 1024,           // Max concurrent connections | 最大并发连接数
+		DisableKeepalive:      false,                // Keep-alive enabled | 启用长连接
+		ReduceMemoryUsage:     false,                // High performance mode | 高性能模式
 	})
 
 	initBase()
@@ -255,6 +291,9 @@ func RunModules(moduleNames []string, addr string) {
 	// Print startup information | 打印启动信息
 	printStartupInfo(addr, targetModules)
 
+	// Setup graceful shutdown | 设置优雅关闭
+	setupGracefulShutdown(targetModules)
+
 	// Start HTTP server (blocking)
 	if err := app.Listen(addr); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
@@ -316,4 +355,183 @@ func printStartupInfo(addr string, modules []Module) {
 
 	serverLog.Info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	serverLog.Info("Server is ready to accept connections")
+}
+
+// customErrorHandler handles errors in a unified way
+// customErrorHandler 统一处理错误
+func customErrorHandler(c *fiber.Ctx, err error) error {
+	// Check if it's a BizError | 检查是否为业务错误
+	var bizErr *bizErrors.BizError
+	if errors.As(err, &bizErr) {
+		// Get HTTP status code from business error code | 从业务错误码获取 HTTP 状态码
+		statusCode := getHTTPStatusCode(bizErr.Code)
+		c.Status(statusCode)
+		
+		return c.JSON(response.Response{
+			Code: bizErr.Code,
+			Msg:  bizErr.Msg,
+		})
+	}
+
+	// Check if it's a Fiber error | 检查是否为 Fiber 错误
+	var fiberErr *fiber.Error
+	if errors.As(err, &fiberErr) {
+		c.Status(fiberErr.Code)
+		
+		// Map common Fiber errors to business error codes | 映射常见 Fiber 错误到业务错误码
+		code := mapFiberErrorCode(fiberErr.Code)
+		return c.JSON(response.Response{
+			Code: code,
+			Msg:  fiberErr.Message,
+		})
+	}
+
+	// Unknown error, return 500 | 未知错误，返回 500
+	c.Status(fiber.StatusInternalServerError)
+	
+	// Log the error for debugging | 记录错误用于调试
+	serverLog := logger.NewSystem("server")
+	serverLog.Error("Unhandled error: %v", err)
+	
+	return c.JSON(response.Response{
+		Code: response.CodeServerError,
+		Msg:  response.CodeServerError.Msg(),
+	})
+}
+
+// getHTTPStatusCode maps business error codes to HTTP status codes
+// getHTTPStatusCode 将业务错误码映射到 HTTP 状态码
+func getHTTPStatusCode(code response.Code) int {
+	switch {
+	// Success | 成功
+	case code == response.CodeSuccess:
+		return fiber.StatusOK
+
+	// Authentication errors (401) | 认证错误 (401)
+	case code == response.CodeUnauth,
+		code == response.CodeTokenExpired,
+		code == response.CodeTokenInvalid:
+		return fiber.StatusUnauthorized
+
+	// Authorization errors (403) | 授权错误 (403)
+	case code == response.CodeForbid:
+		return fiber.StatusForbidden
+
+	// Not found errors (404) | 未找到错误 (404)
+	case code == response.CodeNotFound,
+		code == response.CodeUserNotFound:
+		return fiber.StatusNotFound
+
+	// Parameter errors (400) | 参数错误 (400)
+	case code == response.CodeParamError,
+		code == response.CodeParamMissing,
+		code == response.CodeParamInvalid:
+		return fiber.StatusBadRequest
+
+	// Conflict errors (409) | 冲突错误 (409)
+	case code == response.CodeDuplicate,
+		code == response.CodeUserExists:
+		return fiber.StatusConflict
+
+	// Rate limiting (429) | 限流 (429)
+	case code == response.CodeTooManyRequests:
+		return fiber.StatusTooManyRequests
+
+	// Server errors (500) | 服务器错误 (500)
+	case code == response.CodeServerError,
+		code == response.CodeDBError,
+		code == response.CodeRedisError:
+		return fiber.StatusInternalServerError
+
+	// Business errors (422) | 业务错误 (422)
+	case code >= 4000 && code < 5000:
+		return fiber.StatusUnprocessableEntity
+
+	// Default to 500 for unknown errors | 未知错误默认返回 500
+	default:
+		return fiber.StatusInternalServerError
+	}
+}
+
+// mapFiberErrorCode maps Fiber HTTP status codes to business error codes
+// mapFiberErrorCode 将 Fiber HTTP 状态码映射到业务错误码
+func mapFiberErrorCode(statusCode int) response.Code {
+	switch statusCode {
+	case fiber.StatusBadRequest:
+		return response.CodeParamError
+	case fiber.StatusUnauthorized:
+		return response.CodeUnauth
+	case fiber.StatusForbidden:
+		return response.CodeForbid
+	case fiber.StatusNotFound:
+		return response.CodeNotFound
+	case fiber.StatusConflict:
+		return response.CodeDuplicate
+	case fiber.StatusTooManyRequests:
+		return response.CodeTooManyRequests
+	case fiber.StatusInternalServerError:
+		return response.CodeServerError
+	default:
+		return response.CodeError
+	}
+}
+
+// setupGracefulShutdown sets up graceful shutdown for the application
+// setupGracefulShutdown 为应用程序设置优雅关闭
+func setupGracefulShutdown(targetModules []Module) {
+	// Create channel to listen for interrupt signals | 创建通道监听中断信号
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		// Wait for interrupt signal | 等待中断信号
+		sig := <-quit
+		serverLog := logger.NewSystem("server")
+		serverLog.Info("Received shutdown signal: %v", sig)
+		serverLog.Info("Starting graceful shutdown...")
+
+		// Create shutdown context with timeout | 创建带超时的关闭上下文
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Shutdown HTTP server | 关闭 HTTP 服务器
+		serverLog.Info("Shutting down HTTP server...")
+		if err := app.ShutdownWithContext(ctx); err != nil {
+			serverLog.Error("HTTP server shutdown error: %v", err)
+		} else {
+			serverLog.Info("HTTP server stopped")
+		}
+
+		// Stop cron scheduler | 停止定时任务调度器
+		serverLog.Info("Stopping cron scheduler...")
+		cron.Stop()
+		serverLog.Info("Cron scheduler stopped")
+
+		// Stop modules | 停止模块
+		serverLog.Info("Stopping modules...")
+		for _, m := range targetModules {
+			if err := m.Stop(); err != nil {
+				serverLog.Error("Module %s stop error: %v", m.Name(), err)
+			} else {
+				serverLog.Info("Module %s stopped", m.Name())
+			}
+		}
+
+		// Close database connections | 关闭数据库连接
+		serverLog.Info("Closing database connections...")
+		pgsql.Close()
+		serverLog.Info("Database connections closed")
+
+		// Close pkg resources | 关闭 pkg 资源
+		serverLog.Info("Closing pkg resources...")
+		pkg.Close()
+		serverLog.Info("Pkg resources closed")
+
+		serverLog.Info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		serverLog.Info("✅ Graceful shutdown completed")
+		serverLog.Info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+		// Exit the application | 退出应用程序
+		os.Exit(0)
+	}()
 }

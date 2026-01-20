@@ -10,6 +10,12 @@ strict_dependency_check = true
 [server]
 addr = ":3000"
 
+# ==================== Logger Configuration ====================
+[logger]
+enabled = true          # Enable file logging | 启用文件日志
+buffer_size = 65536     # Buffer size in bytes (64KB) | 缓冲区大小（字节，64KB）
+flush_interval = "3s"   # Flush interval (e.g., "3s", "5s", "10s") | 刷新间隔（例如 "3s", "5s", "10s"）
+
 # ==================== Snowflake ID Generator ====================
 [snowflake]
 machine_id = 1  # Machine ID (0-1023), must be unique in distributed environment

@@ -238,9 +238,12 @@ func WithRetryDelay(d time.Duration) Option {
 
 // NewMutex creates a mutex using default Locker
 // NewMutex 使用默认 Locker 创建互斥锁
+// Returns nil if lock is not initialized
+// 如果锁未初始化则返回 nil
 func NewMutex(name string, opts ...Option) *Mutex {
 	if defaultLocker == nil {
-		panic("lock: not initialized, call lock.Init() first")
+		log.Error("lock: not initialized, call lock.Init() first")
+		return nil
 	}
 	return defaultLocker.NewMutex(name, opts...)
 }
@@ -249,6 +252,9 @@ func NewMutex(name string, opts ...Option) *Mutex {
 // WithLock 在锁保护下执行函数
 func WithLock(ctx context.Context, name string, fn func() error, opts ...Option) error {
 	mu := NewMutex(name, opts...)
+	if mu == nil {
+		return fmt.Errorf("lock: not initialized, call lock.Init() first")
+	}
 	if err := mu.LockContext(ctx); err != nil {
 		return err
 	}
@@ -260,6 +266,9 @@ func WithLock(ctx context.Context, name string, fn func() error, opts ...Option)
 // TryWithLock 尝试在锁保护下执行函数（非阻塞）
 func TryWithLock(ctx context.Context, name string, fn func() error, opts ...Option) (bool, error) {
 	mu := NewMutex(name, opts...)
+	if mu == nil {
+		return false, fmt.Errorf("lock: not initialized, call lock.Init() first")
+	}
 	ok, err := mu.TryLockContext(ctx)
 	if err != nil {
 		return false, err

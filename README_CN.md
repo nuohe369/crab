@@ -254,7 +254,7 @@ go run . serve -s all  # 启动所有模块
 ```go
 import "server/pkg/logger"
 
-var log = logger.NewWithName[struct{}]("模块名")
+var log = logger.NewWithName("模块名")
 
 log.Info("消息 %s", arg)
 log.Error("错误 %v", err)

@@ -2,9 +2,11 @@ package handler
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/nuohe369/crab/common/errors"
 	"github.com/nuohe369/crab/common/model"
 	"github.com/nuohe369/crab/common/request"
 	"github.com/nuohe369/crab/common/response"
+	"github.com/nuohe369/crab/module/testapi/internal/vo"
 	"github.com/nuohe369/crab/pkg/util"
 )
 
@@ -28,28 +30,28 @@ func SetupUser(router fiber.Router) {
 func CreateUser(c *fiber.Ctx) error {
 	var req request.CreateUserReq
 	if err := c.BodyParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
 	if req.Username == "" || req.Nickname == "" || req.Password == "" {
-		return response.FailMsg(c, response.CodeParamMissing, "username, nickname, password required")
+		return errors.New(response.CodeParamMissing, "username, nickname, password required")
 	}
 
-	user := &model.User{
+	user := &model.ExampleUser{
 		Username: req.Username,
 		Nickname: req.Nickname,
 	}
 	if err := user.SetPassword(req.Password); err != nil {
-		return response.FailMsg(c, response.CodeServerError, err.Error())
+		return errors.Wrap(response.CodeServerError, err)
 	}
 
 	_, err := model.GetDB(user).Insert(user)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, fiber.Map{
-		"id": util.Int64ToString(user.ID),
+		"id": user.ID.String(),
 	})
 }
 
@@ -59,19 +61,19 @@ func CreateUser(c *fiber.Ctx) error {
 func GetUser(c *fiber.Ctx) error {
 	id := util.MustStringToInt64(c.Params("id"))
 	if id == 0 {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("id 不能为空")
 	}
 
-	user := &model.User{}
+	user := &model.ExampleUser{}
 	has, err := model.GetDB(user).ID(id).Get(user)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 	if !has {
-		return response.FailCode(c, response.CodeUserNotFound)
+		return errors.ErrUserNotFound()
 	}
 
-	return response.OK(c, toUserResp(user))
+	return response.OK(c, vo.ToUserVO(user))
 }
 
 // UpdateUser updates a user
@@ -80,15 +82,15 @@ func GetUser(c *fiber.Ctx) error {
 func UpdateUser(c *fiber.Ctx) error {
 	var req request.UpdateUserReq
 	if err := c.BodyParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
 	id := util.MustStringToInt64(req.ID)
 	if id == 0 {
-		return response.FailMsg(c, response.CodeParamMissing, "id required")
+		return errors.New(response.CodeParamMissing, "id required")
 	}
 
-	user := &model.User{}
+	user := &model.ExampleUser{}
 	cols := []string{}
 
 	if req.Nickname != "" {
@@ -101,12 +103,12 @@ func UpdateUser(c *fiber.Ctx) error {
 	}
 
 	if len(cols) == 0 {
-		return response.FailMsg(c, response.CodeParamMissing, "nothing to update")
+		return errors.New(response.CodeParamMissing, "nothing to update")
 	}
 
 	_, err := model.GetDB(user).ID(id).Cols(cols...).Update(user)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, nil)
@@ -118,13 +120,13 @@ func UpdateUser(c *fiber.Ctx) error {
 func DeleteUser(c *fiber.Ctx) error {
 	id := util.MustStringToInt64(c.Params("id"))
 	if id == 0 {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("id 不能为空")
 	}
 
-	user := &model.User{}
+	user := &model.ExampleUser{}
 	_, err := model.GetDB(user).ID(id).Delete(user)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, nil)
@@ -136,15 +138,15 @@ func DeleteUser(c *fiber.Ctx) error {
 func ListUser(c *fiber.Ctx) error {
 	var req request.PageReq
 	if err := c.QueryParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
-	user := &model.User{}
-	var list []model.User
+	user := &model.ExampleUser{}
+	var list []model.ExampleUser
 
 	total, err := model.GetDB(user).Count(user)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	err = model.GetDB(user).
@@ -152,36 +154,8 @@ func ListUser(c *fiber.Ctx) error {
 		Desc("created_at").
 		Find(&list)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
-	return response.OKList(c, toUserRespList(list), total, req.GetPage(), req.GetSize())
-}
-
-// ================ Response ================
-
-type userResp struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Nickname  string `json:"nickname"`
-	Status    int    `json:"status"`
-	CreatedAt string `json:"created_at"`
-}
-
-func toUserResp(u *model.User) userResp {
-	return userResp{
-		ID:        util.Int64ToString(u.ID),
-		Username:  u.Username,
-		Nickname:  u.Nickname,
-		Status:    u.Status,
-		CreatedAt: u.CreatedAt.Format("2006-01-02 15:04:05"),
-	}
-}
-
-func toUserRespList(list []model.User) []userResp {
-	result := make([]userResp, len(list))
-	for i, u := range list {
-		result[i] = toUserResp(&u)
-	}
-	return result
+	return response.OKList(c, vo.ToUserVOList(list), total, req.GetPage(), req.GetSize())
 }

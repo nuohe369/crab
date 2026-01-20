@@ -53,17 +53,14 @@ func TestWithRetryDelay_Option(t *testing.T) {
 	}
 }
 
-func TestNewMutex_Panic(t *testing.T) {
-	// 确保未初始化时 panic
+func TestNewMutex_NotInitialized(t *testing.T) {
+	// 确保未初始化时返回 nil 而不是 panic
 	defaultLocker = nil
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic when locker not initialized")
-		}
-	}()
-
-	NewMutex("test")
+	mu := NewMutex("test")
+	if mu != nil {
+		t.Error("Expected nil when locker not initialized")
+	}
 }
 
 // 以下测试需要真实 Redis，默认跳过

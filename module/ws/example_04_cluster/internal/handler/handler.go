@@ -15,7 +15,7 @@ import (
 const channel = "ws:example:cluster"
 
 var (
-	log = logger.NewWithName[struct{}]("ws.cluster")
+	log = logger.NewWithName("ws.cluster")
 	hub *ws.Hub
 	ctx context.Context
 )

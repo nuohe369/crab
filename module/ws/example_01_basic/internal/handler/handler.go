@@ -8,7 +8,7 @@ import (
 	"github.com/nuohe369/crab/pkg/ws"
 )
 
-var log = logger.NewWithName[struct{}]("ws.basic")
+var log = logger.NewWithName("ws.basic")
 var hub *ws.Hub
 
 func init() {

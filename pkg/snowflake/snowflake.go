@@ -3,6 +3,10 @@
 package snowflake
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -94,4 +98,84 @@ func NewNode(machineID int64) *Node {
 		machineID = machineID & machineMax
 	}
 	return &Node{machineID: machineID}
+}
+
+// SnowflakeID is a custom type for Snowflake IDs with automatic conversion support
+// SnowflakeID 是雪花 ID 的自定义类型，支持自动转换
+type SnowflakeID int64
+
+// FromDB converts database value to SnowflakeID (called by XORM when reading from database)
+// FromDB 将数据库值转换为 SnowflakeID（XORM 从数据库读取时调用）
+func (s *SnowflakeID) FromDB(b []byte) error {
+	if b == nil || len(b) == 0 {
+		*s = 0
+		return nil
+	}
+	// Parse the database value (stored as bigint) to int64
+	id, err := strconv.ParseInt(string(b), 10, 64)
+	if err != nil {
+		return errors.New("failed to parse snowflake ID: " + err.Error())
+	}
+	*s = SnowflakeID(id)
+	return nil
+}
+
+// ToDB converts SnowflakeID to database value (called by XORM when writing to database)
+// ToDB 将 SnowflakeID 转换为数据库值（XORM 写入数据库时调用）
+func (s SnowflakeID) ToDB() (driver.Value, error) {
+	return int64(s), nil
+}
+
+// String returns the string representation of SnowflakeID
+// String 返回 SnowflakeID 的字符串表示
+func (s SnowflakeID) String() string {
+	return strconv.FormatInt(int64(s), 10)
+}
+
+// Int64 returns the int64 value of SnowflakeID
+// Int64 返回 SnowflakeID 的 int64 值
+func (s SnowflakeID) Int64() int64 {
+	return int64(s)
+}
+
+// MarshalJSON implements json.Marshaler interface to serialize as string
+// MarshalJSON 实现 json.Marshaler 接口，序列化为字符串
+func (s SnowflakeID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
+}
+
+// UnmarshalJSON implements json.Unmarshaler interface to deserialize from string or number
+// UnmarshalJSON 实现 json.Unmarshaler 接口，从字符串或数字反序列化
+func (s *SnowflakeID) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		id, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return errors.New("invalid snowflake ID string: " + err.Error())
+		}
+		*s = SnowflakeID(id)
+		return nil
+	}
+
+	// Try to unmarshal as number
+	var num int64
+	if err := json.Unmarshal(data, &num); err == nil {
+		*s = SnowflakeID(num)
+		return nil
+	}
+
+	return errors.New("snowflake ID must be a string or number")
+}
+
+// IsZero checks if the SnowflakeID is zero
+// IsZero 检查 SnowflakeID 是否为零
+func (s SnowflakeID) IsZero() bool {
+	return s == 0
+}
+
+// Valid checks if the SnowflakeID is valid (non-zero)
+// Valid 检查 SnowflakeID 是否有效（非零）
+func (s SnowflakeID) Valid() bool {
+	return s != 0
 }

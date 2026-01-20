@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"github.com/nuohe369/crab/common/errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nuohe369/crab/common/model"
 	"github.com/nuohe369/crab/common/request"
 	"github.com/nuohe369/crab/common/response"
+	"github.com/nuohe369/crab/module/testapi/internal/vo"
 	"github.com/nuohe369/crab/pkg/util"
 )
 
@@ -25,25 +27,25 @@ func SetupCategory(router fiber.Router) {
 func CreateCategory(c *fiber.Ctx) error {
 	var req request.CreateCategoryReq
 	if err := c.BodyParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
 	if req.Name == "" {
-		return response.FailMsg(c, response.CodeParamMissing, "name required")
+		return errors.New(response.CodeParamMissing, "name required")
 	}
 
-	category := &model.Category{
+	category := &model.ExampleCategory{
 		Name: req.Name,
 		Sort: req.Sort,
 	}
 
 	_, err := model.GetDB(category).Insert(category)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, fiber.Map{
-		"id": util.Int64ToString(category.ID),
+		"id": category.ID.String(),
 	})
 }
 
@@ -53,19 +55,19 @@ func CreateCategory(c *fiber.Ctx) error {
 func GetCategory(c *fiber.Ctx) error {
 	id := util.MustStringToInt64(c.Params("id"))
 	if id == 0 {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
-	category := &model.Category{}
+	category := &model.ExampleCategory{}
 	has, err := model.GetDB(category).ID(id).Get(category)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 	if !has {
-		return response.FailCode(c, response.CodeNotFound)
+		return errors.ErrNotFound()
 	}
 
-	return response.OK(c, toCategoryResp(category))
+	return response.OK(c, vo.ToCategoryVO(category))
 }
 
 // UpdateCategory updates a category
@@ -74,15 +76,15 @@ func GetCategory(c *fiber.Ctx) error {
 func UpdateCategory(c *fiber.Ctx) error {
 	var req request.UpdateCategoryReq
 	if err := c.BodyParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
 	id := util.MustStringToInt64(req.ID)
 	if id == 0 {
-		return response.FailMsg(c, response.CodeParamMissing, "id required")
+		return errors.New(response.CodeParamMissing, "id required")
 	}
 
-	category := &model.Category{}
+	category := &model.ExampleCategory{}
 	cols := []string{}
 
 	if req.Name != "" {
@@ -99,12 +101,12 @@ func UpdateCategory(c *fiber.Ctx) error {
 	}
 
 	if len(cols) == 0 {
-		return response.FailMsg(c, response.CodeParamMissing, "nothing to update")
+		return errors.New(response.CodeParamMissing, "nothing to update")
 	}
 
 	_, err := model.GetDB(category).ID(id).Cols(cols...).Update(category)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, nil)
@@ -116,13 +118,13 @@ func UpdateCategory(c *fiber.Ctx) error {
 func DeleteCategory(c *fiber.Ctx) error {
 	id := util.MustStringToInt64(c.Params("id"))
 	if id == 0 {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
-	category := &model.Category{}
+	category := &model.ExampleCategory{}
 	_, err := model.GetDB(category).ID(id).Delete(category)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	return response.OK(c, nil)
@@ -134,15 +136,15 @@ func DeleteCategory(c *fiber.Ctx) error {
 func ListCategory(c *fiber.Ctx) error {
 	var req request.PageReq
 	if err := c.QueryParser(&req); err != nil {
-		return response.FailCode(c, response.CodeParamError)
+		return errors.ErrParamInvalid("参数解析失败")
 	}
 
-	category := &model.Category{}
-	var list []model.Category
+	category := &model.ExampleCategory{}
+	var list []model.ExampleCategory
 
 	total, err := model.GetDB(category).Count(category)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
 	err = model.GetDB(category).
@@ -151,36 +153,8 @@ func ListCategory(c *fiber.Ctx) error {
 		Desc("created_at").
 		Find(&list)
 	if err != nil {
-		return response.FailMsg(c, response.CodeDBError, err.Error())
+		return errors.ErrDBError(err)
 	}
 
-	return response.OKList(c, toCategoryRespList(list), total, req.GetPage(), req.GetSize())
-}
-
-// ================ Response ================
-
-type categoryResp struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Sort      int    `json:"sort"`
-	Status    int    `json:"status"`
-	CreatedAt string `json:"created_at"`
-}
-
-func toCategoryResp(c *model.Category) categoryResp {
-	return categoryResp{
-		ID:        util.Int64ToString(c.ID),
-		Name:      c.Name,
-		Sort:      c.Sort,
-		Status:    c.Status,
-		CreatedAt: c.CreatedAt.Format("2006-01-02 15:04:05"),
-	}
-}
-
-func toCategoryRespList(list []model.Category) []categoryResp {
-	result := make([]categoryResp, len(list))
-	for i, c := range list {
-		result[i] = toCategoryResp(&c)
-	}
-	return result
+	return response.OKList(c, vo.ToCategoryVOList(list), total, req.GetPage(), req.GetSize())
 }

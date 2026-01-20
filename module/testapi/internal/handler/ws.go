@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/nuohe369/crab/common/errors"
 	"context"
 	"strconv"
 	"time"
@@ -28,7 +29,7 @@ func PushToUser(c *fiber.Ctx) error {
 	content := c.Query("content", "test message")
 
 	if userID == 0 {
-		return response.FailMsg(c, response.CodeParamError, "user_id cannot be empty")
+		return errors.ErrParamInvalid("user_id cannot be empty")
 	}
 
 	err := service.PublishToUser(context.Background(), userID, &ws.Message{
@@ -39,7 +40,7 @@ func PushToUser(c *fiber.Ctx) error {
 		},
 	})
 	if err != nil {
-		return response.FailMsg(c, response.CodeServerError, err.Error())
+		return errors.Wrap(response.CodeServerError, err)
 	}
 
 	return response.OK(c, fiber.Map{
@@ -63,7 +64,7 @@ func Broadcast(c *fiber.Ctx) error {
 		},
 	})
 	if err != nil {
-		return response.FailMsg(c, response.CodeServerError, err.Error())
+		return errors.Wrap(response.CodeServerError, err)
 	}
 
 	return response.OK(c, fiber.Map{

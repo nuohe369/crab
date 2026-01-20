@@ -18,9 +18,9 @@ func (m *Module) Name() string {
 
 func (m *Module) Models() []any {
 	return []any{
-		new(model.User),     // crab_usercenter 数据库
-		new(model.Category), // crab_business 数据库
-		new(model.Article),  // crab_business 数据库
+		new(model.ExampleUser),     // crab_example 数据库
+		new(model.ExampleCategory), // crab_example 数据库
+		new(model.ExampleArticle),  // crab_example 数据库
 	}
 }
 

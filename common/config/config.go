@@ -5,6 +5,7 @@ package config
 import (
 	"github.com/nuohe369/crab/pkg/config"
 	"github.com/nuohe369/crab/pkg/jwt"
+	"github.com/nuohe369/crab/pkg/logger"
 	"github.com/nuohe369/crab/pkg/metrics"
 	"github.com/nuohe369/crab/pkg/mq"
 	"github.com/nuohe369/crab/pkg/pgsql"
@@ -18,6 +19,7 @@ import (
 type Config struct {
 	App       App                     `toml:"app"`
 	Server    Server                  `toml:"server"`
+	Logger    logger.Config           `toml:"logger"`
 	Snowflake Snowflake               `toml:"snowflake"`
 	Database  map[string]pgsql.Config `toml:"database"`
 	Redis     map[string]redis.Config `toml:"redis"`
@@ -211,4 +213,13 @@ func GetMetrics() metrics.Config {
 // GetStorage 返回存储配置
 func GetStorage() storage.Config {
 	return cfg.Storage
+}
+
+// GetLogger returns the logger configuration
+// GetLogger 返回日志器配置
+func GetLogger() logger.Config {
+	if cfg == nil {
+		return logger.DefaultConfig()
+	}
+	return cfg.Logger
 }

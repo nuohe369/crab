@@ -254,7 +254,7 @@ All logs go through the unified logger with colored console output and module-sp
 ```go
 import "server/pkg/logger"
 
-var log = logger.NewWithName[struct{}]("module-name")
+var log = logger.NewWithName("module-name")
 
 log.Info("message %s", arg)
 log.Error("error %v", err)

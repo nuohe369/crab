@@ -217,6 +217,12 @@ strict_dependency_check = true  # Strict dependency checking (true in prod by de
 [server]
 addr = ":3000"
 
+# ==================== Logger Configuration ====================
+[logger]
+enabled = true          # Enable file logging
+buffer_size = 65536     # Buffer size in bytes (64KB)
+flush_interval = "3s"   # Flush interval
+
 # ==================== Snowflake ID Generator ====================
 [snowflake]
 machine_id = 1  # Machine ID (0-1023), must be unique in distributed environment
@@ -236,6 +242,11 @@ show_sql = false      # Show SQL logs
 addr = "localhost:6379"
 password = ""
 db = 0
+
+# ==================== JWT Configuration ====================
+[jwt]
+secret = "your-jwt-secret-change-me"
+expire = "24h"
 
 # ==================== Service Configuration ====================
 # Define different service combinations, start with: serve -s <name>

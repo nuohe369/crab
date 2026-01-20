@@ -3,7 +3,6 @@ package logger
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -34,29 +33,18 @@ var levelColors = map[Level]string{
 	ERROR: "\033[31m", // Red | 红色
 }
 
-// Logger is a generic logger
-// Logger 是一个泛型日志器
-type Logger[T any] struct {
+// Logger is a logger
+// Logger 是一个日志器
+type Logger struct {
 	module string
 	color  string
 	writer *Writer
 }
 
-// New creates module logger, automatically gets module name through generics
-// New 创建模块日志器，通过泛型自动获取模块名
-func New[T any]() *Logger[T] {
-	name := reflect.TypeOf((*T)(nil)).Elem().Name()
-	return &Logger[T]{
-		module: name,
-		color:  getModuleColor(name),
-		writer: NewWriter(name),
-	}
-}
-
 // NewWithName creates logger with specified module name
 // NewWithName 创建指定模块名的日志器
-func NewWithName[T any](name string) *Logger[T] {
-	return &Logger[T]{
+func NewWithName(name string) *Logger {
+	return &Logger{
 		module: name,
 		color:  getModuleColor(name),
 		writer: NewWriter(name),
@@ -66,7 +54,7 @@ func NewWithName[T any](name string) *Logger[T] {
 // System represents system-level logger (for boot/common and other base layers)
 // System 表示系统级日志器（用于 boot/common 等基础层）
 type System struct {
-	*Logger[struct{}]
+	*Logger
 }
 
 // NewSystem creates system logger
@@ -74,7 +62,7 @@ type System struct {
 func NewSystem(name string) *System {
 	fullName := "system:" + name
 	return &System{
-		Logger: &Logger[struct{}]{
+		Logger: &Logger{
 			module: fullName,
 			color:  "\033[93m", // Bright yellow, fixed color for system level | 亮黄色，系统级固定颜色
 			writer: NewWriter("system"),
@@ -95,7 +83,7 @@ func getTraceID(ctx context.Context) string {
 	return ""
 }
 
-func (l *Logger[T]) log(ctx context.Context, level Level, msg string, args ...any) {
+func (l *Logger) log(ctx context.Context, level Level, msg string, args ...any) {
 	now := time.Now()
 	text := msg
 	if len(args) > 0 {
@@ -132,41 +120,41 @@ func (l *Logger[T]) log(ctx context.Context, level Level, msg string, args ...an
 }
 
 // Log methods with ctx | 带 ctx 的日志方法
-func (l *Logger[T]) DebugCtx(ctx context.Context, msg string, args ...any) {
+func (l *Logger) DebugCtx(ctx context.Context, msg string, args ...any) {
 	l.log(ctx, DEBUG, msg, args...)
 }
 
-func (l *Logger[T]) InfoCtx(ctx context.Context, msg string, args ...any) {
+func (l *Logger) InfoCtx(ctx context.Context, msg string, args ...any) {
 	l.log(ctx, INFO, msg, args...)
 }
 
-func (l *Logger[T]) WarnCtx(ctx context.Context, msg string, args ...any) {
+func (l *Logger) WarnCtx(ctx context.Context, msg string, args ...any) {
 	l.log(ctx, WARN, msg, args...)
 }
 
-func (l *Logger[T]) ErrorCtx(ctx context.Context, msg string, args ...any) {
+func (l *Logger) ErrorCtx(ctx context.Context, msg string, args ...any) {
 	l.log(ctx, ERROR, msg, args...)
 }
 
 // Log methods without ctx (for compatibility) | 不带 ctx 的日志方法（兼容性）
-func (l *Logger[T]) Debug(msg string, args ...any) {
+func (l *Logger) Debug(msg string, args ...any) {
 	l.log(nil, DEBUG, msg, args...)
 }
 
-func (l *Logger[T]) Info(msg string, args ...any) {
+func (l *Logger) Info(msg string, args ...any) {
 	l.log(nil, INFO, msg, args...)
 }
 
-func (l *Logger[T]) Warn(msg string, args ...any) {
+func (l *Logger) Warn(msg string, args ...any) {
 	l.log(nil, WARN, msg, args...)
 }
 
-func (l *Logger[T]) Error(msg string, args ...any) {
+func (l *Logger) Error(msg string, args ...any) {
 	l.log(nil, ERROR, msg, args...)
 }
 
 // Close closes logger
 // Close 关闭日志器
-func (l *Logger[T]) Close() error {
+func (l *Logger) Close() error {
 	return l.writer.Close()
 }

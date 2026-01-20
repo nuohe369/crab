@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/nuohe369/crab/common/response"
 	"github.com/nuohe369/crab/pkg/ratelimit"
+	pkgredis "github.com/nuohe369/crab/pkg/redis"
 )
 
 // defaultLimiter is the default rate limiter (memory-based) | defaultLimiter 默认限流器（基于内存）
@@ -15,6 +17,20 @@ var defaultLimiter ratelimit.Limiter
 
 func init() {
 	defaultLimiter = ratelimit.NewMemory()
+}
+
+// InitRateLimiter initializes the rate limiter with Redis if available
+// InitRateLimiter 如果 Redis 可用，则使用 Redis 初始化限流器
+// Call this after Redis is initialized | 在 Redis 初始化后调用
+func InitRateLimiter() {
+	redisClient := pkgredis.Get()
+	if redisClient != nil {
+		// Use Redis-based rate limiter for distributed scenarios
+		// 使用基于 Redis 的限流器用于分布式场景
+		if universalClient, ok := redisClient.GetRaw().(redis.UniversalClient); ok {
+			defaultLimiter = ratelimit.NewRedisWithClient(universalClient, "ratelimit:")
+		}
+	}
 }
 
 // SetLimiter sets the global rate limiter

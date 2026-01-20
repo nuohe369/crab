@@ -10,7 +10,7 @@ import (
 	"github.com/nuohe369/crab/pkg/ws"
 )
 
-var log = logger.NewWithName[struct{}]("ws.multiuser")
+var log = logger.NewWithName("ws.multiuser")
 var hub *ws.Hub
 
 func init() {

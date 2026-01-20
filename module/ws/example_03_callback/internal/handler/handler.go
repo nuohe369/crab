@@ -10,7 +10,7 @@ import (
 	"github.com/nuohe369/crab/pkg/ws"
 )
 
-var log = logger.NewWithName[struct{}]("ws.callback")
+var log = logger.NewWithName("ws.callback")
 var hub *ws.Hub
 
 func init() {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	_ "github.com/lib/pq"
 	"xorm.io/xorm"
@@ -152,8 +153,18 @@ func New(cfg Config) (*Client, error) {
 		return nil, err
 	}
 
+	// Configure connection pool | 配置连接池
+	engine.SetMaxOpenConns(100)                      // Maximum open connections | 最大连接数
+	engine.SetMaxIdleConns(20)                       // Maximum idle connections | 最大空闲连接
+	engine.SetConnMaxLifetime(time.Hour)             // Connection max lifetime | 连接最大生命周期
+	engine.SetConnMaxIdleTime(10 * time.Minute)      // Idle connection timeout | 空闲连接超时
+
 	xormLogger := NewXormLogger(cfg.ShowSQL)
 	engine.SetLogger(xormLogger)
+
+	// Add slow query monitoring hook | 添加慢查询监控钩子
+	slowQueryHook := NewSlowQueryHook(time.Second, nil)
+	engine.AddHook(slowQueryHook)
 
 	return &Client{engine: engine, xormLogger: xormLogger}, nil
 }

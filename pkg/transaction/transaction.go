@@ -128,9 +128,11 @@ func WithNestedTransaction(db *xorm.Engine, existingSession *xorm.Session, fn fu
 }
 
 // MustTransaction executes function within a transaction, panics on failure
-// Suitable for initialization scenarios that must succeed
+// ⚠️ WARNING: This function panics on error and should ONLY be used in initialization code
+// For runtime operations, use WithTransaction instead
 // MustTransaction 在事务中执行函数，失败时 panic
-// 适用于必须成功的初始化场景
+// ⚠️ 警告：此函数在错误时会 panic，仅应在初始化代码中使用
+// 运行时操作请使用 WithTransaction
 func MustTransaction(db *xorm.Engine, fn func(*xorm.Session) error) {
 	if err := WithTransaction(db, fn); err != nil {
 		panic(err)
