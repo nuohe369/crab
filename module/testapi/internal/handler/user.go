@@ -19,9 +19,6 @@ func SetupUser(router fiber.Router) {
 	g.Put("/", UpdateUser)
 	g.Delete("/:id", DeleteUser)
 	g.Get("/", ListUser)
-
-	// Saga transaction example | Saga 事务示例
-	g.Delete("/:id/saga", DeleteUserWithSaga)
 }
 
 // CreateUser creates a user

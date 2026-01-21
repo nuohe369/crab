@@ -6,12 +6,8 @@ import (
 	"github.com/nuohe369/crab/pkg/config"
 	"github.com/nuohe369/crab/pkg/jwt"
 	"github.com/nuohe369/crab/pkg/logger"
-	"github.com/nuohe369/crab/pkg/metrics"
-	"github.com/nuohe369/crab/pkg/mq"
 	"github.com/nuohe369/crab/pkg/pgsql"
 	"github.com/nuohe369/crab/pkg/redis"
-	"github.com/nuohe369/crab/pkg/storage"
-	"github.com/nuohe369/crab/pkg/trace"
 )
 
 // Config represents the application configuration
@@ -23,11 +19,7 @@ type Config struct {
 	Snowflake Snowflake               `toml:"snowflake"`
 	Database  map[string]pgsql.Config `toml:"database"`
 	Redis     map[string]redis.Config `toml:"redis"`
-	MQ        mq.Config               `toml:"mq"`
 	JWT       jwt.Config              `toml:"jwt"`
-	Trace     trace.Config            `toml:"trace"`
-	Metrics   metrics.Config          `toml:"metrics"`
-	Storage   storage.Config          `toml:"storage"`
 	Services  []Service               `toml:"services"`
 }
 
@@ -174,22 +166,10 @@ func GetJWT() jwt.Config {
 	return cfg.JWT
 }
 
-// GetTrace returns the tracing configuration
-// GetTrace 返回追踪配置
-func GetTrace() trace.Config {
-	return cfg.Trace
-}
-
 // GetServices returns the list of service configurations
 // GetServices 返回服务配置列表
 func GetServices() []Service {
 	return cfg.Services
-}
-
-// GetMQ returns the message queue configuration
-// GetMQ 返回消息队列配置
-func GetMQ() mq.Config {
-	return cfg.MQ
 }
 
 // GetService returns a service configuration by name
@@ -201,18 +181,6 @@ func GetService(name string) *Service {
 		}
 	}
 	return nil
-}
-
-// GetMetrics returns the metrics configuration
-// GetMetrics 返回指标配置
-func GetMetrics() metrics.Config {
-	return cfg.Metrics
-}
-
-// GetStorage returns the storage configuration
-// GetStorage 返回存储配置
-func GetStorage() storage.Config {
-	return cfg.Storage
 }
 
 // GetLogger returns the logger configuration

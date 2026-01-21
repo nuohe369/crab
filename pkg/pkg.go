@@ -8,27 +8,19 @@ import (
 	"github.com/nuohe369/crab/pkg/cron"
 	"github.com/nuohe369/crab/pkg/jwt"
 	"github.com/nuohe369/crab/pkg/logger"
-	"github.com/nuohe369/crab/pkg/metrics"
-	"github.com/nuohe369/crab/pkg/mq"
 	"github.com/nuohe369/crab/pkg/pgsql"
 	"github.com/nuohe369/crab/pkg/redis"
 	"github.com/nuohe369/crab/pkg/snowflake"
-	"github.com/nuohe369/crab/pkg/storage"
-	"github.com/nuohe369/crab/pkg/trace"
 )
 
-var traceShutdown func(context.Context) error
+var _ func(context.Context) error // placeholder for removed traceShutdown
 
 // Config holds all infrastructure configuration
 type Config struct {
 	SnowflakeMachineID int64
 	Databases          map[string]pgsql.Config
 	Redis              map[string]redis.Config
-	MQ                 mq.Config
 	JWT                jwt.Config
-	Metrics            metrics.Config
-	Storage            storage.Config
-	Trace              trace.Config
 }
 
 // Init initializes the infrastructure layer with provided configuration.
@@ -120,17 +112,6 @@ func Init(cfg Config) {
 	cron.Init(redis.Get())
 	log.Println("  ✓ Cron initialized")
 
-	// Initialize message queue (optional)
-	if cfg.MQ.Driver != "" {
-		if err := mq.Init(cfg.MQ); err != nil {
-			log.Printf("  ⚠ Message queue initialization failed: %v", err)
-		} else {
-			log.Println("  ✓ Message queue initialized")
-		}
-	} else {
-		log.Println("  - Message queue not configured, skipping")
-	}
-
 	// Initialize JWT (optional)
 	if cfg.JWT.Secret != "" {
 		jwt.Init(cfg.JWT)
@@ -139,64 +120,11 @@ func Init(cfg Config) {
 		log.Println("  - JWT not configured, skipping")
 	}
 
-	// Initialize metrics (optional)
-	if cfg.Metrics.Enabled {
-		metrics.Init(cfg.Metrics)
-		log.Println("  ✓ Metrics initialized")
-	} else {
-		log.Println("  - Metrics not enabled, skipping")
-	}
-
-	// Initialize storage (optional)
-	if cfg.Storage.Driver != "" {
-		if err := storage.Init(cfg.Storage); err != nil {
-			log.Printf("  ⚠ Storage initialization failed: %v", err)
-		} else {
-			log.Println("  ✓ Storage initialized")
-		}
-	} else {
-		log.Println("  - Storage not configured, skipping")
-	}
-
-	// Initialize distributed tracing (optional)
-	if cfg.Trace.Endpoint != "" {
-		shutdown, err := trace.Init(cfg.Trace)
-		if err != nil {
-			log.Printf("  ⚠ Trace initialization failed: %v", err)
-		} else {
-			traceShutdown = shutdown
-			// Inject xorm hook to all databases (avoid duplicate injection)
-			hook := &trace.XormHook{}
-			injected := make(map[*pgsql.Client]bool)
-
-			// Inject to all named databases
-			for name := range cfg.Databases {
-				if db := pgsql.Get(name); db != nil && !injected[db] {
-					db.AddHook(hook)
-					injected[db] = true
-				}
-			}
-
-			// Ensure default database is also injected (if not already)
-			if defaultDB := pgsql.Get(); defaultDB != nil && !injected[defaultDB] {
-				defaultDB.AddHook(hook)
-			}
-
-			log.Println("  ✓ Trace initialized")
-		}
-	} else {
-		log.Println("  - Trace not configured, skipping")
-	}
-
 	log.Println("Infrastructure initialization completed")
 }
 
 // Close shuts down the infrastructure.
 func Close() {
-	if traceShutdown != nil {
-		traceShutdown(context.Background())
-	}
 	pgsql.Close()
 	redis.Close()
-	mq.Close()
 }

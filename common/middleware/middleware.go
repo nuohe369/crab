@@ -9,6 +9,5 @@ import (
 func Setup(app *fiber.App) {
 	app.Use(Recovery())
 	app.Use(Cors())
-	app.Use(Trace())
 	app.Use(SmartLogger()) // Smart request logger with auto module detection | 智能请求日志，自动检测模块
 }

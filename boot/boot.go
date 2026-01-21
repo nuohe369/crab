@@ -21,7 +21,6 @@ import (
 	"github.com/nuohe369/crab/pkg/cron"
 	"github.com/nuohe369/crab/pkg/json"
 	"github.com/nuohe369/crab/pkg/logger"
-	"github.com/nuohe369/crab/pkg/metrics"
 	"github.com/nuohe369/crab/pkg/pgsql"
 )
 
@@ -84,11 +83,7 @@ func initBase() {
 		SnowflakeMachineID: snowflakeCfg.MachineID,
 		Databases:          config.GetDatabases(),
 		Redis:              config.GetRedisInstances(),
-		MQ:                 config.GetMQ(),
 		JWT:                config.GetJWT(),
-		Metrics:            config.GetMetrics(),
-		Storage:            config.GetStorage(),
-		Trace:              config.GetTrace(),
 	}
 
 	pkg.Init(pkgCfg)
@@ -211,12 +206,6 @@ func RunModules(moduleNames []string, addr string) {
 
 	// Register global middleware
 	middleware.Setup(app)
-
-	// Register metrics middleware and routes
-	if metrics.Enabled() {
-		app.Use(metrics.Middleware())
-		app.Get(metrics.Path(), metrics.Handler())
-	}
 
 	// Determine which modules to start
 	var targetModules []Module

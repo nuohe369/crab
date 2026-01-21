@@ -6,14 +6,8 @@ import (
 
 // Setup 注册所有路由
 func Setup(router fiber.Router) {
-	// Ping and rate limit examples
+	// Ping examples
 	SetupPing(router)
-
-	// WebSocket push examples
-	SetupWS(router)
-
-	// MQ examples
-	SetupMQ(router)
 
 	// CRUD examples (multi-database demo)
 	SetupUser(router)

@@ -7,7 +7,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/nuohe369/crab/pkg/logger"
-	"github.com/nuohe369/crab/pkg/trace"
 )
 
 // loggers caches logger instances for each module | loggers 缓存各模块的日志器
@@ -54,13 +53,8 @@ func Logger(module string) fiber.Handler {
 		status := c.Response().StatusCode()
 		method := c.Method()
 		path := c.Path()
-		traceID := trace.TraceID(c.UserContext())
 
-		if traceID != "" {
-			log.InfoCtx(c.UserContext(), "%s %s %d %v", method, path, status, latency)
-		} else {
-			log.Info("%s %s %d %v", method, path, status, latency)
-		}
+		log.Info("%s %s %d %v", method, path, status, latency)
 
 		return err
 	}
@@ -109,31 +103,18 @@ func SmartLogger() fiber.Handler {
 		status := c.Response().StatusCode()
 		method := c.Method()
 		path := c.Path()
-		traceID := trace.TraceID(c.UserContext())
 
 		// Log with appropriate level based on status code
 		// 根据状态码使用适当的日志级别
 		if status >= 500 {
 			// Server errors | 服务器错误
-			if traceID != "" {
-				log.ErrorCtx(c.UserContext(), "%s %s %d %v", method, path, status, latency)
-			} else {
-				log.Error("%s %s %d %v", method, path, status, latency)
-			}
+			log.Error("%s %s %d %v", method, path, status, latency)
 		} else if status >= 400 {
 			// Client errors | 客户端错误
-			if traceID != "" {
-				log.WarnCtx(c.UserContext(), "%s %s %d %v", method, path, status, latency)
-			} else {
-				log.Warn("%s %s %d %v", method, path, status, latency)
-			}
+			log.Warn("%s %s %d %v", method, path, status, latency)
 		} else {
 			// Success | 成功
-			if traceID != "" {
-				log.InfoCtx(c.UserContext(), "%s %s %d %v", method, path, status, latency)
-			} else {
-				log.Info("%s %s %d %v", method, path, status, latency)
-			}
+			log.Info("%s %s %d %v", method, path, status, latency)
 		}
 
 		// Return nil instead of the error since we've already handled it
